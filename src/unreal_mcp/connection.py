@@ -71,6 +71,7 @@ class UEConnection:
             self.is_connected = True
             self._last_error = ""
             logger.info("Connected to UE5 editor (node: %s)", node_id)
+            self.push_ue_status("connected")
             return True
         except Exception as exc:
             try:
@@ -84,11 +85,26 @@ class UEConnection:
     def disconnect(self) -> None:
         if self._re:
             try:
+                self.push_ue_status("disconnected")
+            except Exception as exc:
+                logger.warning("unreal-mcp: exception during disconnect status push: %s", exc)
+            try:
                 self._re.stop()
             except Exception:
                 pass
             self._re = None
         self.is_connected = False
+
+    def push_ue_status(self, state: str) -> None:
+        """Execute a status-push snippet in UE5; log a warning on failure (never raises)."""
+        code = f"import unreal_mcp_status; unreal_mcp_status.set_status({state!r})"
+        result = self.execute(code)
+        if not result["ok"]:
+            logger.warning(
+                "unreal-mcp: failed to push UE status '%s': %s",
+                state,
+                result.get("error"),
+            )
 
     def reconnect(self) -> bool:
         self.disconnect()

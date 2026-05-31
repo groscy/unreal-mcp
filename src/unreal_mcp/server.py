@@ -11,6 +11,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import AnyUrl, Resource, TextContent, Tool
 
 from .connection import get_connection
+from .provisioning import provision_ue_status_module
 from .tools import actors, assets, blueprints, editor, python_exec
 from .resources import level as level_resource, content as content_resource, world as world_resource
 
@@ -449,10 +450,14 @@ def main() -> None:
 
 
 async def _run() -> None:
+    import sys
+    _server_command = [sys.executable, "-m", "unreal_mcp.server"]
+
     conn = get_connection()
     connected = conn.connect()
     if connected:
         logger.info("unreal-mcp: connected to UE5 editor")
+        provision_ue_status_module(conn, server_command=_server_command)
     else:
         logger.warning("unreal-mcp: UE5 editor not reachable — tools will return errors until connected")
     try:
