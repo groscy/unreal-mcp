@@ -42,6 +42,14 @@ class TestGetActorProperties:
         assert result["ok"] is False
         assert "not found" in result["error"]
 
+    def test_uses_dir_for_property_enumeration(self):
+        conn = _make_conn(stdout=json.dumps({"ok": True, "properties": {}}))
+        actors.get_actor_properties(conn, "SomeActor")
+        code = conn.execute.call_args[0][0]
+        assert "dir(actor)" in code
+        assert "get_editor_property" in code
+        assert "get_class().get_properties" not in code
+
 
 class TestPlaceActor:
     def test_default_transform_in_code(self):

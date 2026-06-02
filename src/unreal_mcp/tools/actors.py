@@ -43,9 +43,16 @@ if actor is None:
     print(json.dumps({{"ok": False, "error": f"Actor '{{label}}' not found in the current level"}}))
 else:
     props = {{}}
-    for prop in actor.get_class().get_properties():
+    for name in dir(actor):
+        if name.startswith("_"):
+            continue
         try:
-            props[prop.get_name()] = str(actor.get_editor_property(prop.get_name()))
+            v = actor.get_editor_property(name)
+            try:
+                json.dumps(v)
+                props[name] = v
+            except (TypeError, ValueError):
+                props[name] = str(v)
         except Exception:
             pass
     print(json.dumps({{"ok": True, "properties": props}}))

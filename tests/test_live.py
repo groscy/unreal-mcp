@@ -98,6 +98,16 @@ class TestActors:
         labels = [a["label"] for a in listing["actors"]]
         assert label not in labels
 
+    def test_get_actor_properties(self, conn):
+        listing = actors.list_actors(conn)
+        assert listing["actors"], "Level has no actors to inspect"
+        label = listing["actors"][0]["label"]
+        r = actors.get_actor_properties(conn, label)
+        assert r["ok"], r
+        assert "properties" in r
+        assert len(r["properties"]) > 0, "Expected at least one property"
+        print(f"\n  {label} has {len(r['properties'])} properties")
+
     def test_delete_nonexistent_actor(self, conn):
         r = actors.delete_actor(conn, "__nonexistent_actor_xyz__")
         assert r["ok"] is False
