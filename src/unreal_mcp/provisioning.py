@@ -1,4 +1,13 @@
-"""Provisions the UE5-side MCP status module on server connect."""
+"""Provisions the UE5-side MCP status module on server connect.
+
+.. deprecated::
+    This entire module (and the ``set_status``/``push_ue_status`` flow it relies
+    on) is superseded by the ``UnrealMCPStatus`` C++ plugin under ``ue5-plugin/``,
+    which drives the toolbar status widget over the dedicated heartbeat channel
+    (see ``heartbeat.py``) instead of Remote Execution. It is kept as a fallback
+    for projects that have not yet installed the C++ plugin and will be removed in
+    a follow-up change once the plugin is adopted.
+"""
 
 from __future__ import annotations
 

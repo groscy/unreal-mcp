@@ -11,8 +11,10 @@ from mcp.server.stdio import stdio_server
 from mcp.types import AnyUrl, Resource, TextContent, Tool
 
 from .connection import get_connection
+from .heartbeat import HeartbeatClient, run_heartbeat_loop
 from .provisioning import provision_ue_status_module
-from .tools import actors, assets, blueprints, editor, python_exec
+from .reconnect import run_reconnect_loop
+from .tools import actors, assets, blueprints, editor, python_exec, umg
 from .resources import level as level_resource, content as content_resource, world as world_resource
 
 logging.basicConfig(level=logging.INFO)
@@ -249,6 +251,142 @@ ALL_TOOLS: list[Tool] = [
             "required": ["target", "function_name"],
         },
     ),
+    Tool(
+        name="add_event_dispatcher",
+        description="Add a multicast delegate (Event Dispatcher) to a Blueprint.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "name": {"type": "string", "description": "Name of the dispatcher, e.g. OnBaseDestroyed"},
+            },
+            "required": ["asset_path", "name"],
+        },
+    ),
+    Tool(
+        name="add_component",
+        description="Add a component to a Blueprint's component hierarchy (SCS) by class name.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "component_class": {"type": "string", "description": "Class name, e.g. SphereComponent, StaticMeshComponent"},
+                "variable_name": {"type": "string", "description": "Name for the new component variable"},
+            },
+            "required": ["asset_path", "component_class", "variable_name"],
+        },
+    ),
+    Tool(
+        name="set_variable_default",
+        description="Set the default value of an existing Blueprint variable via CDO.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "name": {"type": "string"},
+                "value": {"description": "New default value (any JSON-serialisable type)"},
+            },
+            "required": ["asset_path", "name", "value"],
+        },
+    ),
+    # C++-backed tools (require BattleforgeEditor module to be built)
+    Tool(
+        name="add_component",
+        description="Add a component (e.g. SphereComponent) to a Blueprint's component hierarchy. Requires BattleforgeEditor C++ module.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "component_class": {"type": "string", "description": "e.g. SphereComponent, StaticMeshComponent"},
+                "variable_name": {"type": "string"},
+            },
+            "required": ["asset_path", "component_class", "variable_name"],
+        },
+    ),
+    Tool(
+        name="set_variable_default",
+        description="Set a Blueprint variable's default value. Requires BattleforgeEditor C++ module for Blueprint-defined vars.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "name": {"type": "string"},
+                "value": {"description": "New default value"},
+                "value_type": {"type": "string", "default": "float", "description": "float, int, or bool"},
+            },
+            "required": ["asset_path", "name", "value"],
+        },
+    ),
+    Tool(
+        name="create_widget_layout",
+        description="Build a UMG widget hierarchy from a JSON layout descriptor. Requires BattleforgeEditor C++ module.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "layout": {
+                    "type": "object",
+                    "description": 'Layout tree, e.g. {"type":"VerticalBox","name":"Root","children":[{"type":"TextBlock","name":"Title","text":"Hello"}]}',
+                },
+            },
+            "required": ["asset_path", "layout"],
+        },
+    ),
+    Tool(
+        name="add_property_binding",
+        description="Bind a UMG widget property to a Blueprint function (e.g. TextBlock.Text → GetPowerText). Requires BattleforgeEditor C++ module.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "widget_name": {"type": "string", "description": "Name of the widget in the tree"},
+                "property_name": {"type": "string", "description": "e.g. Text, ColorAndOpacity"},
+                "function_name": {"type": "string", "description": "Function graph to bind to"},
+            },
+            "required": ["asset_path", "widget_name", "property_name", "function_name"],
+        },
+    ),
+    # UMG / Widget Blueprints
+    Tool(
+        name="create_widget_blueprint",
+        description="Create a new Widget Blueprint asset (UserWidget subclass).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string", "description": "Full content path, e.g. /Game/UI/WBP_MyWidget"},
+                "parent_class": {"type": "string", "default": "UserWidget"},
+            },
+            "required": ["asset_path"],
+        },
+    ),
+    Tool(
+        name="scaffold_widget",
+        description="Create a Widget Blueprint and add variables and function stubs in one call.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "asset_path": {"type": "string"},
+                "variables": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "type": {"type": "string", "description": "e.g. int, float, bool, name, array:name"},
+                        },
+                        "required": ["name", "type"],
+                    },
+                    "description": "Variables to add",
+                },
+                "functions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Function stub names to add",
+                },
+            },
+            "required": ["asset_path"],
+        },
+    ),
     # editor control
     Tool(
         name="play_in_editor",
@@ -373,6 +511,20 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             return blueprints.get_blueprint_info(conn, args["asset_path"])
         case "call_function":
             return blueprints.call_function(conn, args["target"], args["function_name"], args.get("args", {}))
+        case "add_event_dispatcher":
+            return blueprints.add_event_dispatcher(conn, args["asset_path"], args["name"])
+        case "add_component":
+            return blueprints.add_component_cpp(conn, args["asset_path"], args["component_class"], args["variable_name"])
+        case "set_variable_default":
+            return blueprints.set_variable_default_cpp(conn, args["asset_path"], args["name"], args["value"], args.get("value_type", "float"))
+        case "create_widget_blueprint":
+            return umg.create_widget_blueprint(conn, args["asset_path"], args.get("parent_class", "UserWidget"))
+        case "scaffold_widget":
+            return umg.scaffold_widget(conn, args["asset_path"], args.get("variables"), args.get("functions"))
+        case "create_widget_layout":
+            return umg.create_widget_layout(conn, args["asset_path"], args["layout"])
+        case "add_property_binding":
+            return umg.add_property_binding(conn, args["asset_path"], args["widget_name"], args["property_name"], args["function_name"])
         case "play_in_editor":
             return editor.play_in_editor(conn)
         case "stop_play":
@@ -450,6 +602,7 @@ def main() -> None:
 
 
 async def _run() -> None:
+    import asyncio
     import sys
     _server_command = [sys.executable, "-m", "unreal_mcp.server"]
 
@@ -460,11 +613,29 @@ async def _run() -> None:
         provision_ue_status_module(conn, server_command=_server_command)
     else:
         logger.warning("unreal-mcp: UE5 editor not reachable — tools will return errors until connected")
+
+    # Background reconnect task owns all RE reconnection with exponential backoff.
+    reconnect_task = asyncio.create_task(run_reconnect_loop(conn))
+
+    # Heartbeat channel to the C++ status plugin (non-fatal if it can't connect).
+    heartbeat_client = HeartbeatClient()
+    await heartbeat_client.connect()
+    heartbeat_task = asyncio.create_task(run_heartbeat_loop(heartbeat_client))
+
     try:
         async with stdio_server() as streams:
             await app.run(streams[0], streams[1], app.create_initialization_options())
     finally:
-        get_connection().disconnect()
+        # Stop heartbeat first so it can emit a clean `stopped` event, then the
+        # reconnect task, then close the RE socket.
+        for task in (heartbeat_task, reconnect_task):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        await heartbeat_client.close()
+        conn.disconnect()
 
 
 if __name__ == "__main__":
