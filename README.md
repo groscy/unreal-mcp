@@ -30,6 +30,26 @@ uvx unreal-mcp
 5. Leave the default multicast settings unless you have network conflicts (default: `239.0.0.1:6766`)
 6. Restart the editor
 
+## Status Indicator Plugin (optional, recommended)
+
+The `UnrealMCPStatus` C++ plugin (under `ue5-plugin/UnrealMCPStatus/`) adds a live status label to the UE5 editor toolbar — **Disconnected** (grey), **Connecting** (yellow), **Connected** (green), or **Stopped** (red) — driven by a dedicated TCP heartbeat channel that is independent of Remote Execution. Because it does not rely on the command channel, it correctly shows **Stopped** the moment the MCP server exits or crashes.
+
+To install:
+
+1. Copy `ue5-plugin/UnrealMCPStatus/` into your project's `Plugins/` directory:
+   ```
+   <YourProject>/Plugins/UnrealMCPStatus/
+   ```
+2. Add the plugin to your `.uproject` file's `Plugins` array:
+   ```json
+   { "Name": "UnrealMCPStatus", "Enabled": true }
+   ```
+3. Right-click the `.uproject` and choose **Generate Visual Studio project files** (or run `GenerateProjectFiles`).
+4. Rebuild the editor target (the plugin compiles against Engine modules only — `Sockets`, `Networking`, `Json`, `Slate`, `SlateCore`, `ToolMenus`, `LevelEditor`).
+5. Launch the editor — the status label appears in the level editor toolbar automatically. No Python provisioning step is required.
+
+> The legacy Python toolbar provisioning (`provisioning.py` / `unreal_mcp_status.py`) still works for projects without the C++ plugin, but is deprecated and will be removed in a future release.
+
 ## Claude Desktop Configuration
 
 Add this to your `claude_desktop_config.json` (located at `~/Library/Application Support/Claude/` on macOS or `%APPDATA%\Claude\` on Windows):
@@ -124,6 +144,8 @@ Fixed. Gravity is restored to -980.0.
 | `UE_MULTICAST_PORT` | `6766` | Remote Execution multicast port |
 | `UE_COMMAND_PORT` | `6776` | Remote Execution TCP command port |
 | `UE_CONNECT_TIMEOUT` | `3.0` | Seconds to wait for initial connection |
+| `UE_MCP_HEARTBEAT_PORT` | `6690` | TCP port of the `UnrealMCPStatus` plugin's heartbeat listener |
+| `UE_MCP_HEARTBEAT_INTERVAL` | `5.0` | Seconds between heartbeat messages |
 
 ## Tools
 
@@ -175,6 +197,17 @@ Fixed. Gravity is restored to -980.0.
 - `unreal://world/settings` — Live World Settings properties
 
 Resources always reflect live editor state (fetched on every read, never cached).
+
+## Troubleshooting
+
+**The toolbar status stays "Disconnected" even though the server is running.**
+The heartbeat ports must match on both sides. The Python server connects to the port set by `UE_MCP_HEARTBEAT_PORT` (default `6690`); the C++ plugin listens on the port set by the `mcp.HeartbeatPort` console variable (default `6690`). If you change one, change the other to match.
+
+**The status shows "Port in use".**
+Another process (or a second editor instance) already bound the heartbeat port. Close the other listener or set both `mcp.HeartbeatPort` (C++) and `UE_MCP_HEARTBEAT_PORT` (Python) to a free port.
+
+**The status takes a while to show "Stopped" after a crash.**
+On a clean shutdown the server sends an explicit `stopped` event and the widget updates within a second. If the server is killed abruptly *and* the TCP socket close is not detected immediately, the widget falls back to "Stopped" after a heartbeat timeout of **15 seconds** (3 × the 5-second interval, configurable via `mcp.HeartbeatIntervalSeconds` and `mcp.HeartbeatTimeoutBeats`).
 
 ## License
 
