@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from unreal_mcp.connection import UEConnection, _parse_result
+from unreal_mcp.connection import ConnectionState, UEConnection, _parse_result
 
 
 class TestParseResult:
@@ -53,6 +53,7 @@ class TestUEConnectionNoUE:
         result = conn.ping()
         assert result["ok"] is False
         assert result["connected"] is False
+        assert result["state"] == "disconnected"
 
     def test_execute_when_not_connected(self):
         conn = UEConnection()
@@ -68,7 +69,7 @@ class TestUEConnectionNoUE:
             with patch("unreal_mcp.connection._CONNECT_TIMEOUT", 0.01):
                 result = conn.connect()
         assert result is False
-        assert conn.is_connected is False
+        assert conn.state == ConnectionState.DISCONNECTED
 
     def test_connect_exception_returns_false(self):
         conn = UEConnection()
@@ -77,23 +78,23 @@ class TestUEConnectionNoUE:
             instance.start.side_effect = OSError("socket error")
             result = conn.connect()
         assert result is False
-        assert conn.is_connected is False
+        assert conn.state == ConnectionState.DISCONNECTED
 
-    def test_reconnect_on_connection_error(self):
+    def test_connection_error_flags_reconnecting(self):
+        """execute() no longer reconnects inline; it flags state for the background task."""
         conn = UEConnection()
-        conn.is_connected = True
+        conn.state = ConnectionState.CONNECTED
         conn._re = MagicMock()
         conn._re.run_command.side_effect = ConnectionError("dropped")
 
-        with patch.object(conn, "reconnect", return_value=False) as mock_reconnect:
-            result = conn.execute("1+1")
+        result = conn.execute("1+1")
         assert result["ok"] is False
-        mock_reconnect.assert_called_once()
+        assert conn.state == ConnectionState.RECONNECTING
 
     def test_disconnect_clears_state(self):
         conn = UEConnection()
         conn._re = MagicMock()
-        conn.is_connected = True
+        conn.state = ConnectionState.CONNECTED
         conn.disconnect()
-        assert conn.is_connected is False
+        assert conn.state == ConnectionState.DISCONNECTED
         assert conn._re is None

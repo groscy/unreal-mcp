@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import enum
 import logging
 import os
 import time
@@ -18,9 +19,21 @@ from .remote_execution import (
 
 logger = logging.getLogger(__name__)
 
-_CONNECT_TIMEOUT = float(os.environ.get("UE_CONNECT_TIMEOUT", "5.0"))
+
+class ConnectionState(enum.Enum):
+    """Lifecycle states for the Remote Execution connection."""
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+
+_CONNECT_TIMEOUT = float(os.environ.get("UE_CONNECT_TIMEOUT", "15.0"))
 _MULTICAST_GROUP = os.environ.get("UE_MULTICAST_GROUP", DEFAULT_MULTICAST_GROUP_ENDPOINT[0])
 _MULTICAST_PORT = int(os.environ.get("UE_MULTICAST_PORT", str(DEFAULT_MULTICAST_GROUP_ENDPOINT[1])))
+# Use 0.0.0.0 so we join the multicast group on all adapters — the UE editor
+# defaults to 0.0.0.0 and may broadcast on a physical NIC rather than loopback.
+_MULTICAST_BIND = os.environ.get("UE_MULTICAST_BIND", "0.0.0.0")
 _COMMAND_HOST = os.environ.get("UE_COMMAND_HOST", DEFAULT_COMMAND_ENDPOINT[0])
 _COMMAND_PORT = int(os.environ.get("UE_COMMAND_PORT", str(DEFAULT_COMMAND_ENDPOINT[1])))
 
@@ -34,8 +47,11 @@ class UEConnection:
 
     def __init__(self) -> None:
         self._re: RemoteExecution | None = None
-        self.is_connected = False
+        self.state: ConnectionState = ConnectionState.DISCONNECTED
         self._last_error: str = ""
+        # Exponential-backoff bookkeeping for the background reconnect task.
+        self._reconnect_delay: float = 1.0
+        self._reconnect_attempts: int = 0
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -43,8 +59,19 @@ class UEConnection:
 
     def connect(self) -> bool:
         """Attempt to discover and connect to a UE5 editor. Returns True on success."""
+        # Clean up any prior socket so a reconnect starts from a fresh state.
+        if self._re is not None:
+            try:
+                self._re.stop()
+            except Exception:
+                pass
+            self._re = None
+
+        self.state = ConnectionState.CONNECTING
+
         config = RemoteExecutionConfig()
         config.multicast_group_endpoint = (_MULTICAST_GROUP, _MULTICAST_PORT)
+        config.multicast_bind_address = _MULTICAST_BIND
         config.command_endpoint = (_COMMAND_HOST, _COMMAND_PORT)
 
         re = RemoteExecution(config)
@@ -63,12 +90,13 @@ class UEConnection:
             if node_id is None:
                 re.stop()
                 self._last_error = "Timed out waiting for UE5 editor (no nodes discovered)"
+                self.state = ConnectionState.DISCONNECTED
                 logger.warning(self._last_error)
                 return False
 
             re.open_command_connection(node_id)
             self._re = re
-            self.is_connected = True
+            self.state = ConnectionState.CONNECTED
             self._last_error = ""
             logger.info("Connected to UE5 editor (node: %s)", node_id)
             self.push_ue_status("connected")
@@ -79,6 +107,7 @@ class UEConnection:
             except Exception:
                 pass
             self._last_error = str(exc)
+            self.state = ConnectionState.DISCONNECTED
             logger.warning("Failed to connect to UE5: %s", exc)
             return False
 
@@ -93,10 +122,16 @@ class UEConnection:
             except Exception:
                 pass
             self._re = None
-        self.is_connected = False
+        self.state = ConnectionState.DISCONNECTED
 
     def push_ue_status(self, state: str) -> None:
-        """Execute a status-push snippet in UE5; log a warning on failure (never raises)."""
+        """Execute a status-push snippet in UE5; log a warning on failure (never raises).
+
+        .. deprecated::
+            Status display is moving to the ``UnrealMCPStatus`` C++ plugin driven
+            by the heartbeat channel (see ``heartbeat.py``). This Remote Execution
+            status push will be removed once the C++ plugin is adopted.
+        """
         code = f"import unreal_mcp_status; unreal_mcp_status.set_status({state!r})"
         result = self.execute(code)
         if not result["ok"]:
@@ -106,10 +141,6 @@ class UEConnection:
                 result.get("error"),
             )
 
-    def reconnect(self) -> bool:
-        self.disconnect()
-        return self.connect()
-
     # ------------------------------------------------------------------
     # Core execution
     # ------------------------------------------------------------------
@@ -118,23 +149,21 @@ class UEConnection:
         """Send Python code to UE5 and return structured result.
 
         Returns {"ok": bool, "stdout": str, "result": any, "error": str | None}
+
+        Does not reconnect inline: if the connection is not ``CONNECTED`` this
+        returns an error immediately. Reconnection is owned by the background
+        reconnect task (see ``reconnect.py``); a connection drop mid-call moves
+        the state to ``RECONNECTING`` so that task picks it up.
         """
-        if not self.is_connected or self._re is None:
+        if self.state != ConnectionState.CONNECTED or self._re is None:
             return {"ok": False, "stdout": "", "result": None, "error": _ERROR_NOT_CONNECTED}
 
         try:
             raw = self._re.run_command(code, unattended=True, exec_mode=MODE_EXEC_FILE)
             return _parse_result(raw)
         except (ConnectionError, OSError, RuntimeError) as exc:
-            logger.warning("Connection lost, attempting reconnect: %s", exc)
-            self.is_connected = False
-            if self.reconnect():
-                try:
-                    raw = self._re.run_command(code, unattended=True, exec_mode=MODE_EXEC_FILE)  # type: ignore[union-attr]
-                    return _parse_result(raw)
-                except Exception as exc2:
-                    self.is_connected = False
-                    return {"ok": False, "stdout": "", "result": None, "error": str(exc2)}
+            logger.warning("Connection lost; flagging for background reconnect: %s", exc)
+            self.state = ConnectionState.RECONNECTING
             return {"ok": False, "stdout": "", "result": None, "error": _ERROR_NOT_CONNECTED}
         except Exception as exc:
             return {"ok": False, "stdout": "", "result": None, "error": str(exc)}
@@ -145,14 +174,24 @@ class UEConnection:
 
     def ping(self) -> dict[str, Any]:
         """Return connection status and UE version without executing user code."""
-        if not self.is_connected:
-            return {"ok": False, "connected": False, "error": self._last_error or _ERROR_NOT_CONNECTED}
+        if self.state != ConnectionState.CONNECTED:
+            return {
+                "ok": False,
+                "connected": False,
+                "state": self.state.value,
+                "error": self._last_error or _ERROR_NOT_CONNECTED,
+            }
 
         result = self.execute("import unreal; print(unreal.SystemLibrary.get_engine_version())")
         if result["ok"]:
             version = (result.get("stdout") or "").strip()
-            return {"ok": True, "connected": True, "ue_version": version}
-        return {"ok": False, "connected": False, "error": result.get("error", "Unknown error")}
+            return {"ok": True, "connected": True, "state": self.state.value, "ue_version": version}
+        return {
+            "ok": False,
+            "connected": False,
+            "state": self.state.value,
+            "error": result.get("error", "Unknown error"),
+        }
 
 
 def _parse_result(raw: dict[str, Any]) -> dict[str, Any]:
