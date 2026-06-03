@@ -22,19 +22,23 @@ _MAX_DELAY = 30.0
 # Log every attempt at DEBUG; escalate to WARNING every N consecutive failures.
 _WARN_EVERY = 5
 
-_RECONNECT_STATES = (ConnectionState.DISCONNECTED, ConnectionState.RECONNECTING)
+_RECONNECT_STATES = (ConnectionState.DISCONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
 
 
-async def run_reconnect_loop(conn: UEConnection) -> None:
+async def run_reconnect_loop(conn: UEConnection, on_connect=None) -> None:
     """Monitor ``conn.state`` and retry the RE connection with exponential backoff.
 
     Runs until cancelled (on server shutdown). When connected, it idles cheaply;
-    when disconnected, it retries on the backoff schedule, resetting the delay to
-    1 s on a successful (re)connect.
+    when disconnected/connecting/reconnecting, it retries on the backoff schedule,
+    resetting the delay to 1 s on a successful (re)connect.
+
+    Args:
+        on_connect: Optional callable invoked (via asyncio.to_thread) after each successful
+                    connect. Receives the UEConnection instance as its only argument.
     """
     while True:
         if conn.state not in _RECONNECT_STATES:
-            # Connected (or actively connecting on another path) — idle.
+            # Connected — idle.
             conn._reconnect_delay = _INITIAL_DELAY
             conn._reconnect_attempts = 0
             await asyncio.sleep(1.0)
@@ -46,6 +50,11 @@ async def run_reconnect_loop(conn: UEConnection) -> None:
             logger.info("unreal-mcp: reconnected to UE5 editor")
             conn._reconnect_delay = _INITIAL_DELAY
             conn._reconnect_attempts = 0
+            if on_connect is not None:
+                try:
+                    await asyncio.to_thread(on_connect, conn)
+                except Exception as exc:
+                    logger.warning("unreal-mcp: on_connect callback failed: %s", exc)
             continue
 
         conn._reconnect_attempts += 1

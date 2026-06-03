@@ -31,11 +31,16 @@ class ConnectionState(enum.Enum):
 _CONNECT_TIMEOUT = float(os.environ.get("UE_CONNECT_TIMEOUT", "15.0"))
 _MULTICAST_GROUP = os.environ.get("UE_MULTICAST_GROUP", DEFAULT_MULTICAST_GROUP_ENDPOINT[0])
 _MULTICAST_PORT = int(os.environ.get("UE_MULTICAST_PORT", str(DEFAULT_MULTICAST_GROUP_ENDPOINT[1])))
-# Use 0.0.0.0 so we join the multicast group on all adapters — the UE editor
-# defaults to 0.0.0.0 and may broadcast on a physical NIC rather than loopback.
-_MULTICAST_BIND = os.environ.get("UE_MULTICAST_BIND", "0.0.0.0")
+_MULTICAST_BIND = os.environ.get("UE_MULTICAST_BIND", DEFAULT_MULTICAST_BIND_ADDRESS)
 _COMMAND_HOST = os.environ.get("UE_COMMAND_HOST", DEFAULT_COMMAND_ENDPOINT[0])
 _COMMAND_PORT = int(os.environ.get("UE_COMMAND_PORT", str(DEFAULT_COMMAND_ENDPOINT[1])))
+# Connection mode: "auto" tries direct loopback first, falls back to discovery.
+# "direct" forces direct loopback; "discovery" forces multicast discovery.
+_CONNECT_MODE = os.environ.get("UE_CONNECT_MODE", "auto")
+# Host to send the unicast open_connection to (direct path). Defaults to the RE bind address.
+_CONNECT_HOST = os.environ.get("UE_CONNECT_HOST", _MULTICAST_BIND)
+# Read timeout for the command channel socket. Generous default to handle slow scripts.
+_COMMAND_RECV_TIMEOUT = float(os.environ.get("UE_COMMAND_RECV_TIMEOUT", "30.0"))
 
 _ERROR_NOT_CONNECTED = (
     "UE5 editor not connected. Ensure the editor is running with Remote Execution enabled."
@@ -58,7 +63,65 @@ class UEConnection:
     # ------------------------------------------------------------------
 
     def connect(self) -> bool:
-        """Attempt to discover and connect to a UE5 editor. Returns True on success."""
+        """Attempt to connect to a UE5 editor using the configured mode. Returns True on success.
+
+        Mode is controlled by ``UE_CONNECT_MODE``:
+        - ``auto`` (default): try direct loopback first, fall back to multicast discovery.
+        - ``direct``: direct loopback only (no multicast).
+        - ``discovery``: multicast discovery only.
+        """
+        if _CONNECT_MODE == "direct":
+            return self.connect_direct()
+        if _CONNECT_MODE == "discovery":
+            return self._connect_discovery()
+        # auto: direct first, then discovery fallback
+        if self.connect_direct():
+            return True
+        return self._connect_discovery()
+
+    def connect_direct(self) -> bool:
+        """Attempt a direct loopback connection without multicast discovery. Returns True on success.
+
+        Sends a dest-less open_connection unicast to the configured RE bind host, waits for
+        the editor's TCP back-connection, and establishes the command channel.
+        """
+        if self._re is not None:
+            try:
+                self._re.stop()
+            except Exception:
+                pass
+            self._re = None
+
+        self.state = ConnectionState.CONNECTING
+
+        config = RemoteExecutionConfig()
+        config.multicast_group_endpoint = (_MULTICAST_GROUP, _MULTICAST_PORT)
+        config.multicast_bind_address = _MULTICAST_BIND
+        config.command_endpoint = (_COMMAND_HOST, _COMMAND_PORT)
+        config.command_recv_timeout = _COMMAND_RECV_TIMEOUT
+
+        re = RemoteExecution(config)
+        try:
+            host = _CONNECT_HOST
+            re.open_command_connection_direct(host)
+            self._re = re
+            self.state = ConnectionState.CONNECTED
+            self._last_error = ""
+            logger.info("Connected to UE5 editor via direct loopback (host: %s)", host)
+            self.push_ue_status("connected")
+            return True
+        except Exception as exc:
+            try:
+                re.stop()
+            except Exception:
+                pass
+            self._last_error = str(exc)
+            self.state = ConnectionState.DISCONNECTED
+            logger.debug("Direct connect to UE5 failed: %s", exc)
+            return False
+
+    def _connect_discovery(self) -> bool:
+        """Attempt multicast discovery connection. Returns True on success."""
         # Clean up any prior socket so a reconnect starts from a fresh state.
         if self._re is not None:
             try:
@@ -73,6 +136,7 @@ class UEConnection:
         config.multicast_group_endpoint = (_MULTICAST_GROUP, _MULTICAST_PORT)
         config.multicast_bind_address = _MULTICAST_BIND
         config.command_endpoint = (_COMMAND_HOST, _COMMAND_PORT)
+        config.command_recv_timeout = _COMMAND_RECV_TIMEOUT
 
         re = RemoteExecution(config)
         try:
@@ -98,7 +162,7 @@ class UEConnection:
             self._re = re
             self.state = ConnectionState.CONNECTED
             self._last_error = ""
-            logger.info("Connected to UE5 editor (node: %s)", node_id)
+            logger.info("Connected to UE5 editor via discovery (node: %s)", node_id)
             self.push_ue_status("connected")
             return True
         except Exception as exc:

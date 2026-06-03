@@ -63,7 +63,8 @@ class TestUEConnectionNoUE:
 
     def test_connect_timeout_returns_false(self):
         conn = UEConnection()
-        with patch("unreal_mcp.connection.RemoteExecution") as MockRE:
+        with patch("unreal_mcp.connection.RemoteExecution") as MockRE, \
+             patch("unreal_mcp.connection._CONNECT_MODE", "discovery"):
             instance = MockRE.return_value
             instance.remote_nodes = []  # no nodes found
             with patch("unreal_mcp.connection._CONNECT_TIMEOUT", 0.01):
@@ -73,7 +74,8 @@ class TestUEConnectionNoUE:
 
     def test_connect_exception_returns_false(self):
         conn = UEConnection()
-        with patch("unreal_mcp.connection.RemoteExecution") as MockRE:
+        with patch("unreal_mcp.connection.RemoteExecution") as MockRE, \
+             patch("unreal_mcp.connection._CONNECT_MODE", "discovery"):
             instance = MockRE.return_value
             instance.start.side_effect = OSError("socket error")
             result = conn.connect()

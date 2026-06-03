@@ -90,16 +90,19 @@ class HeartbeatClient:
 
 
 async def run_heartbeat_loop(client: HeartbeatClient) -> None:
-    """Send ``connected`` once, then ``heartbeat`` every interval until cancelled.
+    """Maintain the heartbeat connection, retrying if the plugin isn't ready yet.
 
-    On cancellation (clean server shutdown) a final ``stopped`` event is sent
-    before returning so the C++ plugin updates immediately.
+    Sends ``connected`` on each successful (re)connect, then ``heartbeat`` every
+    interval. On cancellation sends ``stopped`` for an immediate widget update.
     """
     try:
-        await client.send("connected", pid=os.getpid())
         while True:
+            if not client.connected:
+                if await client.connect():
+                    await client.send("connected", pid=os.getpid())
+            else:
+                await client.send("heartbeat")
             await asyncio.sleep(_HEARTBEAT_INTERVAL)
-            await client.send("heartbeat")
     except asyncio.CancelledError:
         await client.send("stopped")
         raise

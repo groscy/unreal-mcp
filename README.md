@@ -140,10 +140,14 @@ Fixed. Gravity is restored to -980.0.
 
 | Variable | Default | Description |
 |---|---|---|
+| `UE_CONNECT_MODE` | `auto` | Connection strategy: `auto` (direct first, then discovery fallback), `direct` (loopback only), or `discovery` (multicast only) |
+| `UE_CONNECT_HOST` | `127.0.0.1` | Host to send the unicast `open_connection` to in direct mode (override when the editor's RE bind address is a real NIC) |
+| `UE_MULTICAST_BIND` | `127.0.0.1` | Adapter address for the multicast socket (must match UE's "Multicast Bind Address" setting when using discovery mode) |
 | `UE_MULTICAST_GROUP` | `239.0.0.1` | Remote Execution multicast group |
 | `UE_MULTICAST_PORT` | `6766` | Remote Execution multicast port |
 | `UE_COMMAND_PORT` | `6776` | Remote Execution TCP command port |
-| `UE_CONNECT_TIMEOUT` | `3.0` | Seconds to wait for initial connection |
+| `UE_CONNECT_TIMEOUT` | `15.0` | Seconds to wait for a node during multicast discovery |
+| `UE_COMMAND_RECV_TIMEOUT` | `30.0` | Read timeout (seconds) for the command channel; prevents a hung editor from blocking tool calls indefinitely |
 | `UE_MCP_HEARTBEAT_PORT` | `6690` | TCP port of the `UnrealMCPStatus` plugin's heartbeat listener |
 | `UE_MCP_HEARTBEAT_INTERVAL` | `5.0` | Seconds between heartbeat messages |
 
@@ -199,6 +203,15 @@ Fixed. Gravity is restored to -980.0.
 Resources always reflect live editor state (fetched on every read, never cached).
 
 ## Troubleshooting
+
+**The server never connects on Windows (spins in "Connecting" forever).**
+The default connection strategy (`UE_CONNECT_MODE=auto`) bypasses multicast entirely: it sends a unicast UDP packet to `127.0.0.1:6766`, which triggers the editor to open a TCP back-connection — no multicast socket is involved, so Windows Firewall and virtual adapters (Hyper-V / WSL2 / Docker / VPN) cannot block it.
+
+If the direct path fails (e.g. UE's "Multicast Bind Address" is set to a real NIC rather than `127.0.0.1` / `0.0.0.0`), the server automatically falls back to multicast discovery. You can force one or the other with `UE_CONNECT_MODE=direct` or `UE_CONNECT_MODE=discovery`.
+
+Cross-machine or non-default NIC setups: set `UE_CONNECT_HOST=<editor-NIC-IP>` to point the unicast directly at the right interface, or use `UE_CONNECT_MODE=discovery` with `UE_MULTICAST_BIND=<local-NIC-IP>`.
+
+**The direct connect path works against the stock `PythonScriptPlugin` with its default settings — no UE5-side changes required.**
 
 **The toolbar status stays "Disconnected" even though the server is running.**
 The heartbeat ports must match on both sides. The Python server connects to the port set by `UE_MCP_HEARTBEAT_PORT` (default `6690`); the C++ plugin listens on the port set by the `mcp.HeartbeatPort` console variable (default `6690`). If you change one, change the other to match.

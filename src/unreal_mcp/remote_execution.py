@@ -41,6 +41,7 @@ class RemoteExecutionConfig(object):
         self.multicast_group_endpoint = DEFAULT_MULTICAST_GROUP_ENDPOINT
         self.multicast_bind_address = DEFAULT_MULTICAST_BIND_ADDRESS
         self.command_endpoint = DEFAULT_COMMAND_ENDPOINT
+        self.command_recv_timeout = None  # None = blocking; set to float for a read deadline
 
 class RemoteExecution(object):
     '''
@@ -99,6 +100,42 @@ class RemoteExecution(object):
         '''
         self._command_connection = _RemoteExecutionCommandConnection(self._config, self._node_id, remote_node_id)
         self._command_connection.open(self._broadcast_connection)
+
+    def open_command_connection_direct(self, host=None):
+        '''
+        Open a command connection without multicast discovery by sending a dest-less open_connection
+        message as unicast UDP to the editor's RE listen socket and accepting the editor's TCP
+        back-connection. No broadcast connection is needed; no node id is required.
+
+        Args:
+            host (string): The host to send the unicast open_connection to. Defaults to
+                           multicast_bind_address (falling back to 127.0.0.1 if 0.0.0.0).
+        '''
+        self.close_command_connection()
+
+        if host is None:
+            host = self._config.multicast_bind_address
+            if host == '0.0.0.0':
+                host = '127.0.0.1'
+
+        conn = _RemoteExecutionCommandConnection(self._config, self._node_id, '')
+        conn._init_command_listen_socket()
+
+        for _n in range(6):
+            _send_open_connection_unicast(self._node_id, self._config, host)
+            try:
+                conn._command_channel_socket = conn._command_listen_socket.accept()[0]
+                conn._command_channel_socket.setblocking(True)
+                if self._config.command_recv_timeout is not None:
+                    conn._command_channel_socket.settimeout(self._config.command_recv_timeout)
+                self._command_connection = conn
+                return
+            except _socket.timeout:
+                continue
+
+        conn._command_listen_socket.close()
+        conn._command_listen_socket = None
+        raise RuntimeError('Remote party failed to attempt the command socket connection!')
 
     def close_command_connection(self):
         '''
@@ -409,9 +446,10 @@ class _RemoteExecutionCommandConnection(object):
         Close the TCP based command connection, attempting to notify the remote party.
 
         Args:
-            broadcast_connection (_RemoteExecutionBroadcastConnection): The broadcast connection to send UDP based messages over.
+            broadcast_connection (_RemoteExecutionBroadcastConnection): The broadcast connection to send UDP based messages over, or None for the direct path.
         '''
-        broadcast_connection.broadcast_close_connection(self._remote_node_id)
+        if broadcast_connection is not None and self._remote_node_id:
+            broadcast_connection.broadcast_close_connection(self._remote_node_id)
         if self._command_channel_socket:
             self._command_channel_socket.close()
             self._command_channel_socket = None
@@ -495,6 +533,8 @@ class _RemoteExecutionCommandConnection(object):
             try:
                 self._command_channel_socket = self._command_listen_socket.accept()[0]
                 self._command_channel_socket.setblocking(True)
+                if self._config.command_recv_timeout is not None:
+                    self._command_channel_socket.settimeout(self._config.command_recv_timeout)
                 return
             except _socket.timeout:
                 continue
@@ -603,6 +643,27 @@ class _RemoteExecutionMessage(object):
         '''
         json_str = json_bytes.decode('utf-8')
         return self.from_json(json_str)
+
+def _send_open_connection_unicast(node_id, config, host):
+    '''
+    Send a single dest-less open_connection message as unicast UDP to (host, multicast_port).
+    No multicast group is joined; the socket is closed immediately after the send.
+
+    Args:
+        node_id (string): The local session node id (used as source).
+        config (RemoteExecutionConfig): Configuration supplying command_endpoint and multicast_group_endpoint.
+        host (string): The unicast host to send to (typically 127.0.0.1).
+    '''
+    sock = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM, _socket.IPPROTO_UDP)
+    try:
+        msg = _RemoteExecutionMessage(_TYPE_OPEN_CONNECTION, node_id, None, {
+            'command_ip': config.command_endpoint[0],
+            'command_port': config.command_endpoint[1],
+        })
+        sock.sendto(msg.to_json_bytes(), (host, config.multicast_group_endpoint[1]))
+    finally:
+        sock.close()
+
 
 def _time_now(now=None):
     '''

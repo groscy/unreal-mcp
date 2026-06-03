@@ -10,7 +10,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import AnyUrl, Resource, TextContent, Tool
 
-from .connection import get_connection
+from .connection import ConnectionState, get_connection
 from .heartbeat import HeartbeatClient, run_heartbeat_loop
 from .provisioning import provision_ue_status_module
 from .reconnect import run_reconnect_loop
@@ -607,15 +607,14 @@ async def _run() -> None:
     _server_command = [sys.executable, "-m", "unreal_mcp.server"]
 
     conn = get_connection()
-    connected = conn.connect()
-    if connected:
-        logger.info("unreal-mcp: connected to UE5 editor")
-        provision_ue_status_module(conn, server_command=_server_command)
-    else:
-        logger.warning("unreal-mcp: UE5 editor not reachable — tools will return errors until connected")
+    # Don't block the event loop — let the background reconnect task own the first connect.
+    conn.state = ConnectionState.CONNECTING
+
+    def _provision(c: object) -> None:
+        provision_ue_status_module(c, server_command=_server_command)  # type: ignore[arg-type]
 
     # Background reconnect task owns all RE reconnection with exponential backoff.
-    reconnect_task = asyncio.create_task(run_reconnect_loop(conn))
+    reconnect_task = asyncio.create_task(run_reconnect_loop(conn, on_connect=_provision))
 
     # Heartbeat channel to the C++ status plugin (non-fatal if it can't connect).
     heartbeat_client = HeartbeatClient()
