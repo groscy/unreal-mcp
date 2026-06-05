@@ -447,6 +447,15 @@ ALL_TOOLS: list[Tool] = [
             "required": ["code"],
         },
     ),
+    Tool(
+        name="inspect_pie_state",
+        description=(
+            "Read live Battleforge gameplay state during a PIE session: "
+            "PowerPool, WellsHeld, hand/deck counts, base HP, mine and well ownership. "
+            "Returns JSON suitable for verifying smoke-test scenarios."
+        ),
+        inputSchema={"type": "object", "properties": {}, "required": []},
+    ),
 ]
 
 _TOOL_MAP = {t.name: t for t in ALL_TOOLS}
@@ -541,6 +550,8 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             return editor.set_world_settings(conn, args["settings"])
         case "execute_python":
             return python_exec.execute_python(conn, args["code"])
+        case "inspect_pie_state":
+            return actors.inspect_pie_state(conn)
         case _:
             return {"ok": False, "error": f"Unknown tool: {name}"}
 

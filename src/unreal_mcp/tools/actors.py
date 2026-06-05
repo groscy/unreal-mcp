@@ -169,11 +169,95 @@ else:
     target = actor
     for part in parts[:-1]:
         target = target.get_editor_property(part)
+    prop_name = parts[-1]
     try:
-        target.set_editor_property(parts[-1], value)
+        target.set_editor_property(prop_name, value)
         print(json.dumps({{"ok": True}}))
+    except Exception as first_err:
+        # If the value is a content path string, try loading it as an asset object first.
+        # This handles asset-reference properties like StaticMesh, DecalMaterial, etc.
+        loaded = False
+        if isinstance(value, str) and '/' in value:
+            try:
+                asset_obj = unreal.EditorAssetLibrary.load_asset(value)
+                if asset_obj is None:
+                    asset_obj = unreal.load_object(None, value)
+                if asset_obj is not None:
+                    target.set_editor_property(prop_name, asset_obj)
+                    loaded = True
+            except Exception:
+                pass
+        if loaded:
+            print(json.dumps({{"ok": True, "note": "value loaded as asset reference"}}))
+        else:
+            print(json.dumps({{"ok": False, "error": f"Property '{{property_path}}' on '{{label}}': {{first_err}}"}}))
+"""
+    return _run_and_parse(conn, code)
+
+
+def inspect_pie_state(conn: UEConnection) -> dict[str, Any]:
+    """Read key Battleforge gameplay state during a PIE session.
+
+    Returns PowerPool, WellsHeld, MaxTier, hand/deck counts, base HP for both
+    players, and mine ownership — enough to verify every smoke-test scenario.
+    """
+    code = """
+import unreal, json
+
+def safe(fn):
+    try:
+        return fn()
     except Exception as e:
-        print(json.dumps({{"ok": False, "error": f"Property '{{property_path}}' not found on actor '{{label}}': {{e}}"}}))
+        return f"err:{e}"
+
+def get_pc(idx):
+    try:
+        return unreal.GameplayStatics.get_player_controller(None, idx)
+    except Exception:
+        return None
+
+state = {"ok": True, "players": [], "mines": [], "bases": [], "wells": []}
+
+for idx in range(2):
+    pc = get_pc(idx)
+    p = {"index": idx}
+    if pc is None:
+        p["error"] = "no PlayerController"
+    else:
+        p["power"]      = safe(lambda: pc.get_editor_property("power_pool"))
+        p["wells_held"] = safe(lambda: pc.get_editor_property("wells_held"))
+        p["class"]      = pc.get_class().get_name()
+        # Hand/deck counts via HandManager component (if present)
+        hm = safe(lambda: pc.get_editor_property("hand_manager"))
+        if hm and not isinstance(hm, str):
+            p["hand_count"] = safe(lambda: len(hm.get_editor_property("hand_cards")))
+            p["deck_count"] = safe(lambda: len(hm.get_editor_property("deck_cards")))
+    state["players"].append(p)
+
+# Base HP
+for a in unreal.EditorLevelLibrary.get_all_level_actors():
+    cls = a.get_class().get_name()
+    lbl = a.get_actor_label()
+    if "PlayerBase" in cls or "BP_PlayerBase" in cls:
+        state["bases"].append({
+            "label": lbl,
+            "owner": safe(lambda: a.get_editor_property("owner_player_index")),
+            "hp":    safe(lambda: a.get_editor_property("hp")),
+            "max_hp": safe(lambda: a.get_editor_property("max_hp")),
+        })
+    elif "Mine" in cls or "BP_Mine" in cls:
+        state["mines"].append({
+            "label": lbl,
+            "owner": safe(lambda: a.get_editor_property("owner_player_index")),
+            "progress": safe(lambda: a.get_editor_property("capture_progress")),
+        })
+    elif "ManaWell" in cls or "BP_ManaWell" in cls:
+        state["wells"].append({
+            "label": lbl,
+            "owner": safe(lambda: a.get_editor_property("owner_player_index")),
+        })
+
+print(json.dumps(state, default=str))
 """
     return _run_and_parse(conn, code)
 
