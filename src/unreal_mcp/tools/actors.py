@@ -198,8 +198,14 @@ else:
 def inspect_pie_state(conn: UEConnection) -> dict[str, Any]:
     """Read key Battleforge gameplay state during a PIE session.
 
-    Returns PowerPool, WellsHeld, MaxTier, hand/deck counts, base HP for both
-    players, and mine ownership — enough to verify every smoke-test scenario.
+    Returns the round phase plus, per player, PowerPool, WellsHeld, derived
+    MaxTier, and hand/deck/discard counts (with the card row names in hand) — and
+    base HP, mine, and well ownership. Enough to verify the player-HUD scenarios
+    (power/hand/deck/discard live updates and per-card affordability/tier access).
+
+    Battleforge stores these as Blueprint variables, which UE Python exposes only
+    under their **literal PascalCase names** (e.g. ``PowerPool``, not
+    ``power_pool``); the snippet below relies on that.
     """
     code = """
 import unreal, json
@@ -210,52 +216,76 @@ def safe(fn):
     except Exception as e:
         return f"err:{e}"
 
-def get_pc(idx):
+def prop(obj, name):
     try:
-        return unreal.GameplayStatics.get_player_controller(None, idx)
+        return obj.get_editor_property(name)
+    except Exception as e:
+        return f"err:{e}"
+
+def _game_world():
+    try:
+        return unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world()
     except Exception:
         return None
 
+gw = _game_world()
+
+def get_pc(idx):
+    try:
+        return unreal.GameplayStatics.get_player_controller(gw, idx)
+    except Exception:
+        return None
+
+_PHASES = {0: "Waiting", 1: "DeckBuilder", 2: "RoundActive", 3: "RoundEnd"}
+
 state = {"ok": True, "players": [], "mines": [], "bases": [], "wells": []}
 
-for idx in range(2):
+# Round phase lives on the GameMode (only visible to the authority/server world).
+gm = safe(lambda: unreal.GameplayStatics.get_game_mode(gw))
+if gm and not isinstance(gm, str):
+    phase = prop(gm, "GamePhase")
+    state["game_phase"] = phase
+    if isinstance(phase, int):
+        state["game_phase_name"] = _PHASES.get(phase, "Unknown")
+
+# Player index 1 typically has no controller in single-player PIE — stop at the first gap.
+for idx in range(4):
     pc = get_pc(idx)
-    p = {"index": idx}
     if pc is None:
-        p["error"] = "no PlayerController"
+        break
+    p = {"index": idx, "class": pc.get_class().get_name()}
+    p["power"]     = prop(pc, "PowerPool")
+    p["wells_held"] = prop(pc, "WellsHeld")
+    p["max_tier"]  = safe(lambda: pc.call_method("GetMaxTier"))
+    # Hand/deck/discard via the HandManager reference (null until a round starts).
+    hm = prop(pc, "HandManager")
+    if hm and not isinstance(hm, str):
+        hand = prop(hm, "HandCards")
+        deck = prop(hm, "DeckCards")
+        disc = prop(hm, "DiscardPile")
+        p["hand_count"]    = len(hand) if isinstance(hand, (list, tuple)) else hand
+        p["deck_count"]    = len(deck) if isinstance(deck, (list, tuple)) else deck
+        p["discard_count"] = len(disc) if isinstance(disc, (list, tuple)) else disc
+        if isinstance(hand, (list, tuple)):
+            p["hand_rows"] = [str(c) for c in hand]
     else:
-        p["power"]      = safe(lambda: pc.get_editor_property("power_pool"))
-        p["wells_held"] = safe(lambda: pc.get_editor_property("wells_held"))
-        p["class"]      = pc.get_class().get_name()
-        # Hand/deck counts via HandManager component (if present)
-        hm = safe(lambda: pc.get_editor_property("hand_manager"))
-        if hm and not isinstance(hm, str):
-            p["hand_count"] = safe(lambda: len(hm.get_editor_property("hand_cards")))
-            p["deck_count"] = safe(lambda: len(hm.get_editor_property("deck_cards")))
+        p["hand_manager"] = "null (no active round / deck not dealt)"
     state["players"].append(p)
 
-# Base HP
-for a in unreal.EditorLevelLibrary.get_all_level_actors():
+# Bases / mines / wells from the PIE world (falls back to the editor world).
+_all = (unreal.GameplayStatics.get_all_actors_of_class(gw, unreal.Actor)
+        if gw is not None else unreal.EditorLevelLibrary.get_all_level_actors())
+for a in _all:
     cls = a.get_class().get_name()
     lbl = a.get_actor_label()
-    if "PlayerBase" in cls or "BP_PlayerBase" in cls:
-        state["bases"].append({
-            "label": lbl,
-            "owner": safe(lambda: a.get_editor_property("owner_player_index")),
-            "hp":    safe(lambda: a.get_editor_property("hp")),
-            "max_hp": safe(lambda: a.get_editor_property("max_hp")),
-        })
-    elif "Mine" in cls or "BP_Mine" in cls:
-        state["mines"].append({
-            "label": lbl,
-            "owner": safe(lambda: a.get_editor_property("owner_player_index")),
-            "progress": safe(lambda: a.get_editor_property("capture_progress")),
-        })
-    elif "ManaWell" in cls or "BP_ManaWell" in cls:
-        state["wells"].append({
-            "label": lbl,
-            "owner": safe(lambda: a.get_editor_property("owner_player_index")),
-        })
+    if "PlayerBase" in cls:
+        state["bases"].append({"label": lbl, "owner": prop(a, "OwnerPlayerIndex"),
+                               "hp": prop(a, "HP"), "max_hp": prop(a, "MaxHP")})
+    elif "Mine" in cls:
+        state["mines"].append({"label": lbl, "owner": prop(a, "StartingOwnerIndex"),
+                               "progress": prop(a, "CaptureProgress")})
+    elif "ManaWell" in cls:
+        state["wells"].append({"label": lbl, "owner": prop(a, "OwnerPlayerIndex")})
 
 print(json.dumps(state, default=str))
 """

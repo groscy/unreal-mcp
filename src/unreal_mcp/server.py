@@ -8,13 +8,13 @@ from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import AnyUrl, Resource, TextContent, Tool
+from mcp.types import AnyUrl, ImageContent, Resource, TextContent, Tool
 
 from .connection import ConnectionState, get_connection
 from .heartbeat import HeartbeatClient, run_heartbeat_loop
 from .provisioning import provision_ue_status_module
 from .reconnect import run_reconnect_loop
-from .tools import actors, assets, blueprints, editor, python_exec, umg
+from .tools import actors, assets, blueprints, editor, python_exec, umg, verification
 from .resources import level as level_resource, content as content_resource, world as world_resource
 
 logging.basicConfig(level=logging.INFO)
@@ -456,6 +456,83 @@ ALL_TOOLS: list[Tool] = [
         ),
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
+    # runtime verification (visual + live state)
+    Tool(
+        name="take_screenshot",
+        description=(
+            "Capture the active viewport to a PNG and return it as an image. "
+            "If a PIE session is running, captures the in-game view (HUD included); "
+            "otherwise the editor viewport. Use to verify UI/visual state."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "width": {"type": "integer", "default": 1280},
+                "height": {"type": "integer", "default": 720},
+                "label": {"type": "string", "description": "Optional filename label for the saved PNG"},
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="inspect_live_widgets",
+        description=(
+            "Inspect live widget instances in the running PIE viewport, filtered by class "
+            "(e.g. 'TextBlock', 'Image'). Returns each instance's runtime text, color/opacity "
+            "tint, and visibility — including binding-driven values. Use to verify "
+            "castable/non-castable tint and live bound readouts. Requires a running PIE session."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "widget_class": {"type": "string", "default": "TextBlock", "description": "UMG class name, e.g. TextBlock or Image"},
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="list_viewport_widgets",
+        description=(
+            "List top-level UserWidgets currently in the PIE viewport (class, in_viewport, "
+            "visibility). Use to confirm a HUD appears on the active phase and leaves no "
+            "stale widgets at round end. Requires a running PIE session."
+        ),
+        inputSchema={"type": "object", "properties": {}, "required": []},
+    ),
+    Tool(
+        name="set_pie_property",
+        description=(
+            "Set a property on a live PIE object to stage a scenario (e.g. force a player's "
+            "power above/below a card cost). target: 'player0'/'player1', 'gamemode', "
+            "'gamestate', or an actor label. property_path is dot-separated."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "target": {"type": "string"},
+                "property_path": {"type": "string"},
+                "value": {"description": "New value (any JSON-serialisable type)"},
+            },
+            "required": ["target", "property_path", "value"],
+        },
+    ),
+    Tool(
+        name="call_pie_function",
+        description=(
+            "Invoke a BlueprintCallable function on a live PIE object to drive gameplay "
+            "(advance round phase, cast a card, redraw, etc.). target: 'player0'/'player1', "
+            "'gamemode', 'gamestate', or an actor label."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "target": {"type": "string"},
+                "function_name": {"type": "string"},
+                "args": {"type": "object", "description": "Optional keyword arguments", "default": {}},
+            },
+            "required": ["target", "function_name"],
+        },
+    ),
 ]
 
 _TOOL_MAP = {t.name: t for t in ALL_TOOLS}
@@ -467,12 +544,18 @@ async def list_tools() -> list[Tool]:
 
 
 @app.call_tool()
-async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent | ImageContent]:
     try:
         result = _dispatch(name, arguments)
     except Exception as exc:
         result = {"ok": False, "error": str(exc)}
-    return [TextContent(type="text", text=json.dumps(result))]
+    # A tool may attach a binary image under "_image"; emit it as ImageContent and
+    # keep the rest of the payload as a text summary alongside it.
+    image = result.pop("_image", None) if isinstance(result, dict) else None
+    content: list[TextContent | ImageContent] = [TextContent(type="text", text=json.dumps(result))]
+    if image:
+        content.append(ImageContent(type="image", data=image["data"], mimeType=image["mimeType"]))
+    return content
 
 
 def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -552,6 +635,16 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             return python_exec.execute_python(conn, args["code"])
         case "inspect_pie_state":
             return actors.inspect_pie_state(conn)
+        case "take_screenshot":
+            return verification.take_screenshot(conn, args.get("width", 1280), args.get("height", 720), args.get("label"))
+        case "inspect_live_widgets":
+            return verification.inspect_live_widgets(conn, args.get("widget_class", "TextBlock"))
+        case "list_viewport_widgets":
+            return verification.list_viewport_widgets(conn)
+        case "set_pie_property":
+            return verification.set_pie_property(conn, args["target"], args["property_path"], args["value"])
+        case "call_pie_function":
+            return verification.call_pie_function(conn, args["target"], args["function_name"], args.get("args", {}))
         case _:
             return {"ok": False, "error": f"Unknown tool: {name}"}
 

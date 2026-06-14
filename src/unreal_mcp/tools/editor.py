@@ -9,13 +9,16 @@ from ..connection import UEConnection
 
 
 def play_in_editor(conn: UEConnection) -> dict[str, Any]:
+    # PIE start is deferred to the next editor tick, so is_in_play_in_editor()
+    # won't read True until a subsequent call — that's expected.
     code = """
 import unreal, json
-if unreal.EditorLevelLibrary.get_editor_world().is_play_in_editor():
+les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+if les.is_in_play_in_editor():
     print(json.dumps({"ok": False, "error": "PIE session is already running"}))
 else:
-    unreal.EditorLevelLibrary.play_level_in_viewport()
-    print(json.dumps({"ok": True}))
+    les.editor_request_begin_play()
+    print(json.dumps({"ok": True, "note": "PIE begins on the next editor tick"}))
 """
     return _run_and_parse(conn, code)
 
@@ -23,10 +26,11 @@ else:
 def stop_play(conn: UEConnection) -> dict[str, Any]:
     code = """
 import unreal, json
-if not unreal.EditorLevelLibrary.get_editor_world().is_play_in_editor():
+les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+if not les.is_in_play_in_editor():
     print(json.dumps({"ok": False, "error": "No PIE session is currently running"}))
 else:
-    unreal.EditorLevelLibrary.end_play()
+    les.editor_request_end_play()
     print(json.dumps({"ok": True}))
 """
     return _run_and_parse(conn, code)
