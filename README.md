@@ -179,8 +179,13 @@ Fixed. Gravity is restored to -980.0.
 - `compile_blueprint` — Compile a Blueprint and return errors/warnings
 - `add_variable` — Add a variable to a Blueprint
 - `add_function` — Add an empty function graph to a Blueprint
+- `add_event_dispatcher` — Add a multicast delegate (Event Dispatcher) to a Blueprint
 - `get_blueprint_info` — Get variables, functions, and components of a Blueprint
 - `call_function` — Call a function on a level actor or Blueprint CDO
+
+### Widget Blueprints (UMG)
+- `create_widget_blueprint` — Create a new Widget Blueprint asset (UserWidget subclass)
+- `scaffold_widget` — Create a Widget Blueprint and add variables and function stubs in one call
 
 ### Editor Control
 - `play_in_editor` — Start a PIE session
@@ -190,6 +195,16 @@ Fixed. Gravity is restored to -980.0.
 - `run_console_command` — Execute an editor console command
 - `get_world_settings` — Get World Settings properties
 - `set_world_settings` — Set World Settings properties
+
+### Runtime Verification (PIE)
+
+These tools observe and drive a running Play-In-Editor session, so you can verify gameplay and UI state without leaving the editor. All except `take_screenshot` require an active PIE session.
+
+- `take_screenshot` — Capture the active viewport to a PNG and return it as an image. Captures the in-game view (HUD included) during PIE, otherwise the editor viewport
+- `list_viewport_widgets` — List top-level UserWidgets currently in the PIE viewport (class, in_viewport, visibility)
+- `inspect_live_widgets` — Inspect live widget instances by class (e.g. `TextBlock`, `Image`), returning runtime text, color/opacity tint, and visibility — including binding-driven values
+- `set_pie_property` — Set a property on a live PIE object to stage a scenario. `target` is `player0`/`player1`, `gamemode`, `gamestate`, or an actor label; `property_path` is dot-separated
+- `call_pie_function` — Invoke a BlueprintCallable function on a live PIE object to drive gameplay. Same `target` forms as above
 
 ### Python Execution
 - `execute_python` — Execute arbitrary Python in the UE5 editor context (full trust, no restrictions)
