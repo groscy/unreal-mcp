@@ -103,7 +103,8 @@ def save_all_assets(conn: UEConnection) -> dict[str, Any]:
 import unreal, json
 result = unreal.EditorAssetLibrary.save_directory('/Game', recursive=True, only_if_is_dirty=True)
 # Count saved assets by checking dirty state change — approximate via save_directory return value
-# EditorAssetLibrary.save_directory returns True on success but not a count; use asset registry to count
+# EditorAssetLibrary.save_directory returns True on success but not a count;
+# use asset registry to count
 print(json.dumps({"ok": True, "saved_count": -1}))
 """
     return _run_and_parse(conn, code)
@@ -122,7 +123,10 @@ result = unreal.EditorAssetLibrary.duplicate_asset(source_path, destination_path
 if result:
     print(json.dumps({{"ok": True, "new_path": destination_path}}))
 else:
-    print(json.dumps({{"ok": False, "error": f"Failed to duplicate '{{source_path}}' to '{{destination_path}}'"}}))
+    print(json.dumps({{
+        "ok": False,
+        "error": f"Failed to duplicate '{{source_path}}' to '{{destination_path}}'",
+    }}))
 """
     return _run_and_parse(conn, code)
 

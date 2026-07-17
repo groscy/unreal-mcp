@@ -77,7 +77,9 @@ class TestSaveAllAssets:
 
 class TestDuplicateAsset:
     def test_source_and_dest_in_code(self):
-        conn = _make_conn(stdout=json.dumps({"ok": True, "new_path": "/Game/Materials/Mat_Red_Copy"}))
+        conn = _make_conn(
+            stdout=json.dumps({"ok": True, "new_path": "/Game/Materials/Mat_Red_Copy"})
+        )
         assets.duplicate_asset(conn, "/Game/Materials/Mat_Red", "/Game/Materials/Mat_Red_Copy")
         code = conn.execute.call_args[0][0]
         assert "duplicate_asset" in code

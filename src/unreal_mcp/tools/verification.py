@@ -117,7 +117,10 @@ print(json.dumps({{"ok": True, "dir": sdir, "token": token, "is_pie": is_pie}}))
     if path is None:
         return {
             "ok": False,
-            "error": f"Screenshot file not found within {timeout:.0f}s under {sdir} (looked for '{token}*.png')",
+            "error": (
+                f"Screenshot file not found within {timeout:.0f}s under {sdir} "
+                f"(looked for '{token}*.png')"
+            ),
             "dir": sdir,
             "is_pie": req.get("is_pie"),
         }
@@ -163,7 +166,10 @@ def safe(fn):
 cls = getattr(unreal, class_name, None)
 pc = _pie_pc(0)
 if pc is None:
-    print(json.dumps({{"ok": False, "error": "No PIE player controller — start a PIE session first."}}))
+    print(json.dumps({{
+        "ok": False,
+        "error": "No PIE player controller — start a PIE session first.",
+    }}))
 elif cls is None:
     print(json.dumps({{"ok": False, "error": "Unknown widget class '%s'" % class_name}}))
 else:
@@ -181,7 +187,10 @@ else:
         for prop in ("color_and_opacity", "brush_color"):
             try:
                 c = w.get_editor_property(prop)
-                e["color"] = {{"prop": prop, "rgba": [round(c.r,3), round(c.g,3), round(c.b,3), round(c.a,3)]}}
+                e["color"] = {{
+                    "prop": prop,
+                    "rgba": [round(c.r,3), round(c.g,3), round(c.b,3), round(c.a,3)],
+                }}
                 break
             except Exception:
                 continue
@@ -208,7 +217,10 @@ import unreal, json
 {_GAME_CTX}
 pc = _pie_pc(0)
 if pc is None:
-    print(json.dumps({{"ok": False, "error": "No PIE player controller — is a PIE session running?"}}))
+    print(json.dumps({{
+        "ok": False,
+        "error": "No PIE player controller — is a PIE session running?",
+    }}))
 else:
     try:
         found = unreal.WidgetLibrary.get_all_widgets_of_class(pc, unreal.UserWidget, True)
@@ -290,9 +302,17 @@ else:
     try:
         node.set_editor_property(parts[-1], value)
         readback = node.get_editor_property(parts[-1])
-        print(json.dumps({{"ok": True, "target": target, "property": property_path, "value": str(readback)}}))
+        print(json.dumps({{
+            "ok": True,
+            "target": target,
+            "property": property_path,
+            "value": str(readback),
+        }}))
     except Exception as e:
-        print(json.dumps({{"ok": False, "error": "Set '%s' on '%s': %s" % (property_path, target, e)}}))
+        print(json.dumps({{
+            "ok": False,
+            "error": "Set '%s' on '%s': %s" % (property_path, target, e),
+        }}))
 """
     return _run_and_parse(conn, code)
 
@@ -321,9 +341,20 @@ if obj is None:
     print(json.dumps({{"ok": False, "error": "Could not resolve PIE target '%s'" % target}}))
 else:
     try:
-        ret = obj.call_method(function_name, kwargs=kwargs) if kwargs else obj.call_method(function_name)
-        print(json.dumps({{"ok": True, "target": target, "function": function_name, "result": str(ret)}}))
+        ret = (
+            obj.call_method(function_name, kwargs=kwargs) if kwargs
+            else obj.call_method(function_name)
+        )
+        print(json.dumps({{
+            "ok": True,
+            "target": target,
+            "function": function_name,
+            "result": str(ret),
+        }}))
     except Exception as e:
-        print(json.dumps({{"ok": False, "error": "Call '%s' on '%s': %s" % (function_name, target, e)}}))
+        print(json.dumps({{
+            "ok": False,
+            "error": "Call '%s' on '%s': %s" % (function_name, target, e),
+        }}))
 """
     return _run_and_parse(conn, code)

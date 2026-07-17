@@ -150,7 +150,10 @@ asset_path  = {json.dumps(asset_path)}
 layout_json = {json.dumps(layout_json)}
 
 if not hasattr(unreal, "BFWidgetExtensions"):
-    print(json.dumps({{"ok": False, "error": "BFWidgetExtensions not available — build BattleforgeEditor first."}}))
+    print(json.dumps({{
+        "ok": False,
+        "error": "BFWidgetExtensions not available — build BattleforgeEditor first.",
+    }}))
 else:
     ok = unreal.BFWidgetExtensions.create_widget_layout(asset_path, layout_json)
     print(json.dumps({{"ok": ok}}))
@@ -178,9 +181,13 @@ property_name = {json.dumps(property_name)}
 function_name = {json.dumps(function_name)}
 
 if not hasattr(unreal, "BFWidgetExtensions"):
-    print(json.dumps({{"ok": False, "error": "BFWidgetExtensions not available — build BattleforgeEditor first."}}))
+    print(json.dumps({{
+        "ok": False,
+        "error": "BFWidgetExtensions not available — build BattleforgeEditor first.",
+    }}))
 else:
-    ok = unreal.BFWidgetExtensions.add_property_binding(asset_path, widget_name, property_name, function_name)
+    ok = unreal.BFWidgetExtensions.add_property_binding(
+        asset_path, widget_name, property_name, function_name)
     print(json.dumps({{"ok": ok}}))
 """
     return _run_and_parse(conn, code)

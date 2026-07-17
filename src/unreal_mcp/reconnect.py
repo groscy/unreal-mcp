@@ -22,7 +22,11 @@ _MAX_DELAY = 30.0
 # Log every attempt at DEBUG; escalate to WARNING every N consecutive failures.
 _WARN_EVERY = 5
 
-_RECONNECT_STATES = (ConnectionState.DISCONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
+_RECONNECT_STATES = (
+    ConnectionState.DISCONNECTED,
+    ConnectionState.CONNECTING,
+    ConnectionState.RECONNECTING,
+)
 
 
 async def run_reconnect_loop(conn: UEConnection, on_connect=None) -> None:

@@ -32,10 +32,16 @@ class TestGetActorProperties:
         conn = _make_conn(stdout=json.dumps({"ok": True, "properties": {}}))
         actors.get_actor_properties(conn, 'My "Actor"')
         code = conn.execute.call_args[0][0]
-        assert '"My \\"Actor\\""' in code or "My \\\"Actor\\\"" in code or json.dumps('My "Actor"') in code
+        assert (
+            '"My \\"Actor\\""' in code
+            or "My \\\"Actor\\\"" in code
+            or json.dumps('My "Actor"') in code
+        )
 
     def test_not_found_error(self):
-        conn = _make_conn(stdout=json.dumps({"ok": False, "error": "Actor 'X' not found in the current level"}))
+        conn = _make_conn(
+            stdout=json.dumps({"ok": False, "error": "Actor 'X' not found in the current level"})
+        )
         result = actors.get_actor_properties(conn, "X")
         assert result["ok"] is False
         assert "not found" in result["error"]
@@ -51,7 +57,9 @@ class TestGetActorProperties:
 
 class TestPlaceActor:
     def test_default_transform_in_code(self):
-        conn = _make_conn(stdout=json.dumps({"ok": True, "label": "PointLight_0", "name": "PointLight_0"}))
+        conn = _make_conn(
+            stdout=json.dumps({"ok": True, "label": "PointLight_0", "name": "PointLight_0"})
+        )
         actors.place_actor(conn, "/Script/Engine.PointLight")
         code = conn.execute.call_args[0][0]
         assert "spawn_actor_from_class" in code
@@ -79,7 +87,12 @@ class TestSetActorTransform:
         code = conn.execute.call_args[0][0]
         assert "set_actor_location" in code
         # rotation=None so no set_actor_rotation call expected with values
-        assert "rotation = None" in code or '"rotation": null' in code or "rotation = null" in code or "null" in code
+        assert (
+            "rotation = None" in code
+            or '"rotation": null' in code
+            or "rotation = null" in code
+            or "null" in code
+        )
 
     def test_full_transform(self):
         conn = _make_conn(stdout=json.dumps({"ok": True}))

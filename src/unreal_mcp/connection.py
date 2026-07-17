@@ -80,7 +80,9 @@ class UEConnection:
         return self._connect_discovery()
 
     def connect_direct(self) -> bool:
-        """Attempt a direct loopback connection without multicast discovery. Returns True on success.
+        """Attempt a direct loopback connection without multicast discovery.
+
+        Returns True on success.
 
         Sends a dest-less open_connection unicast to the configured RE bind host, waits for
         the editor's TCP back-connection, and establishes the command channel.
@@ -272,15 +274,25 @@ def _parse_result(raw: dict[str, Any]) -> dict[str, Any]:
     #   output: list of {type: 'Info'|'Warning'|'Error', output: str}
     #   result: str (repr of last expression, or 'None')
     output_list = raw.get("output") or []
-    stdout_parts = [item.get("output", "") for item in output_list if item.get("type", "").lower() in ("info", "stdout", "log")]
-    error_parts = [item.get("output", "") for item in output_list if item.get("type", "").lower() in ("error", "exception", "stderr", "critical")]
+    stdout_parts = [
+        item.get("output", "") for item in output_list
+        if item.get("type", "").lower() in ("info", "stdout", "log")
+    ]
+    error_parts = [
+        item.get("output", "") for item in output_list
+        if item.get("type", "").lower() in ("error", "exception", "stderr", "critical")
+    ]
     stdout = "".join(stdout_parts).rstrip("\r\n")
     error: str | None = "".join(error_parts).rstrip("\r\n") if error_parts else None
     result_str = raw.get("result", "None") or "None"
     # When success=False the result field contains the traceback/error string
     if not success and not error and result_str and result_str != "None":
         error = result_str.rstrip("\r\n")
-    result_value = _try_parse_json(result_str) if result_str and result_str != "None" and success else None
+    result_value = (
+        _try_parse_json(result_str)
+        if result_str and result_str != "None" and success
+        else None
+    )
     ok = success and not error_parts
 
     return {

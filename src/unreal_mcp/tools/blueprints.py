@@ -105,7 +105,10 @@ else:
     parent_cls = (unreal.load_class(None, f'/Script/Engine.{{parent_class_name}}')
                   or unreal.load_class(None, parent_class_name))
     if parent_cls is None:
-        print(json.dumps({{"ok": False, "error": f"Parent class '{{parent_class_name}}' not found"}}))
+        print(json.dumps({{
+            "ok": False,
+            "error": f"Parent class '{{parent_class_name}}' not found",
+        }}))
     else:
         bp = BEL.create_blueprint_asset_with_parent(asset_path, parent_cls)
         if bp is None:
@@ -141,7 +144,11 @@ for ad in ar.get_assets(filter_):
             sup = gen.get_super_class()
             if sup:
                 parent = sup.get_name()
-    results.append({{"name": str(ad.asset_name), "path": str(ad.package_name), "parent_class": parent}})
+    results.append({{
+        "name": str(ad.asset_name),
+        "path": str(ad.package_name),
+        "parent_class": parent,
+    }})
 print(json.dumps({{"ok": True, "blueprints": results}}))
 """
     return _run_and_parse(conn, code)
@@ -183,7 +190,14 @@ bp = EAL.load_asset(asset_path)
 if bp is None:
     print(json.dumps({{"ok": False, "error": f"Not found: {{asset_path}}"}}))
 else:
-    info = {{"ok": True, "parent_class": "", "variables": [], "functions": [], "event_dispatchers": [], "components": []}}
+    info = {{
+        "ok": True,
+        "parent_class": "",
+        "variables": [],
+        "functions": [],
+        "event_dispatchers": [],
+        "components": [],
+    }}
 
     # Parent class via AssetRegistry metadata tag (UE 5.7 compatible)
     try:
@@ -268,7 +282,10 @@ else:
         pin_type = _pin_for(var_type)
         ok = BEL.add_member_variable(bp, var_name, pin_type)
         if not ok:
-            print(json.dumps({{"ok": False, "error": f"Variable '{{var_name}}' already exists or could not be created"}}))
+            print(json.dumps({{
+                "ok": False,
+                "error": f"Variable '{{var_name}}' already exists or could not be created",
+            }}))
         else:
             # Optionally set default value via CDO
             if default_value is not None:
@@ -353,7 +370,10 @@ else:
     try:
         g = BEL.add_function_graph(bp, func_name)
         if g is None:
-            print(json.dumps({{"ok": False, "error": f"Function '{{func_name}}' already exists or could not be created"}}))
+            print(json.dumps({{
+                "ok": False,
+                "error": f"Function '{{func_name}}' already exists or could not be created",
+            }}))
         else:
             EAL.save_asset(asset_path)
             print(json.dumps({{"ok": True}}))
@@ -384,7 +404,10 @@ else:
         pin_type = BEL.get_basic_type_by_name("multicast_delegate")
         ok = BEL.add_member_variable(bp, disp_name, pin_type)
         if not ok:
-            print(json.dumps({{"ok": False, "error": f"Dispatcher '{{disp_name}}' already exists or failed"}}))
+            print(json.dumps({{
+                "ok": False,
+                "error": f"Dispatcher '{{disp_name}}' already exists or failed",
+            }}))
         else:
             BEL.compile_blueprint(bp)
             EAL.save_asset(asset_path)
@@ -405,7 +428,10 @@ def add_component(
     component_class: str,
     variable_name: str,
 ) -> dict[str, Any]:
-    """Add a component to a Blueprint's SCS. Requires UE Python to expose SimpleConstructionScript."""
+    """Add a component to a Blueprint's SCS.
+
+    Requires UE Python to expose SimpleConstructionScript.
+    """
     code = f"""
 import unreal, json
 asset_path     = {json.dumps(asset_path)}
@@ -446,7 +472,11 @@ if hasattr(unreal, "EditorBlueprintLibrary"):
 # Component addition requires the Blueprint Components panel in the editor.
 print(json.dumps({{
     "ok": False,
-    "error": "add_component is not supported in UE 5.7 via Python API (SimpleConstructionScript is not exposed). Add the component manually in the Blueprint Components panel.",
+    "error": (
+        "add_component is not supported in UE 5.7 via Python API "
+        "(SimpleConstructionScript is not exposed). Add the component "
+        "manually in the Blueprint Components panel."
+    ),
     "component_class": comp_class_str,
     "variable_name": variable_name,
     "errors": errors,
@@ -473,7 +503,13 @@ comp_class     = {json.dumps(component_class)}
 variable_name  = {json.dumps(variable_name)}
 
 if not hasattr(unreal, "BFEditorExtensions"):
-    print(json.dumps({{"ok": False, "error": "BFEditorExtensions not available — build the BattleforgeEditor C++ module first."}}))
+    print(json.dumps({{
+        "ok": False,
+        "error": (
+            "BFEditorExtensions not available — build the BattleforgeEditor "
+            "C++ module first."
+        ),
+    }}))
 else:
     ok = unreal.BFEditorExtensions.add_component_to_blueprint(asset_path, comp_class, variable_name)
     print(json.dumps({{"ok": ok}}))
@@ -497,7 +533,10 @@ value      = {json.dumps(value)}
 value_type = {json.dumps(value_type)}
 
 if not hasattr(unreal, "BFEditorExtensions"):
-    print(json.dumps({{"ok": False, "error": "BFEditorExtensions not available — build BattleforgeEditor first."}}))
+    print(json.dumps({{
+        "ok": False,
+        "error": "BFEditorExtensions not available — build BattleforgeEditor first.",
+    }}))
 else:
     ext = unreal.BFEditorExtensions
     t = value_type.lower()
@@ -508,7 +547,10 @@ else:
     elif t in ("bool", "boolean"):
         ok = ext.set_variable_default_bool(asset_path, var_name, bool(value))
     else:
-        print(json.dumps({{"ok": False, "error": f"Unsupported type: {{value_type}}. Use float/int/bool."}}))
+        print(json.dumps({{
+            "ok": False,
+            "error": f"Unsupported type: {{value_type}}. Use float/int/bool.",
+        }}))
         ok = False
     if ok is not False:
         print(json.dumps({{"ok": ok}}))

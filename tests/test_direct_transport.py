@@ -66,21 +66,31 @@ class TestOpenCommandConnectionDirect:
             if accept_side_effect is not None:
                 self._command_listen_socket.accept.side_effect = accept_side_effect
             else:
-                self._command_listen_socket.accept.return_value = (mock_channel, ("127.0.0.1", 12345))
+                self._command_listen_socket.accept.return_value = (
+                    mock_channel, ("127.0.0.1", 12345)
+                )
 
         return re, fake_init, mock_channel
 
     def test_success_when_editor_connects_back(self):
         re, fake_init, mock_channel = self._make_re_with_mock_listen()
-        with patch.object(_RemoteExecutionCommandConnection, "_init_command_listen_socket", fake_init), \
-             patch("unreal_mcp.remote_execution._send_open_connection_unicast"):
+        with (
+            patch.object(
+                _RemoteExecutionCommandConnection, "_init_command_listen_socket", fake_init
+            ),
+            patch("unreal_mcp.remote_execution._send_open_connection_unicast"),
+        ):
             re.open_command_connection_direct("127.0.0.1")
         assert re.has_command_connection()
 
     def test_budget_exhausted_raises_and_leaves_no_connection(self):
         re, fake_init, _ = self._make_re_with_mock_listen(accept_side_effect=socket.timeout)
-        with patch.object(_RemoteExecutionCommandConnection, "_init_command_listen_socket", fake_init), \
-             patch("unreal_mcp.remote_execution._send_open_connection_unicast"):
+        with (
+            patch.object(
+                _RemoteExecutionCommandConnection, "_init_command_listen_socket", fake_init
+            ),
+            patch("unreal_mcp.remote_execution._send_open_connection_unicast"),
+        ):
             with pytest.raises(RuntimeError, match="Remote party failed"):
                 re.open_command_connection_direct("127.0.0.1")
         assert not re.has_command_connection()
@@ -95,8 +105,12 @@ class TestOpenCommandConnectionDirect:
             self._command_listen_socket = MagicMock()
             self._command_listen_socket.accept.return_value = (mock_channel, ("127.0.0.1", 1234))
 
-        with patch.object(_RemoteExecutionCommandConnection, "_init_command_listen_socket", fake_init), \
-             patch("unreal_mcp.remote_execution._send_open_connection_unicast"):
+        with (
+            patch.object(
+                _RemoteExecutionCommandConnection, "_init_command_listen_socket", fake_init
+            ),
+            patch("unreal_mcp.remote_execution._send_open_connection_unicast"),
+        ):
             re.open_command_connection_direct("127.0.0.1")
 
         mock_channel.settimeout.assert_called_once_with(15.0)
@@ -117,8 +131,15 @@ class TestOpenCommandConnectionDirect:
         def fake_send(node_id, cfg, host):
             sent_to.append(host)
 
-        with patch.object(_RemoteExecutionCommandConnection, "_init_command_listen_socket", fake_init), \
-             patch("unreal_mcp.remote_execution._send_open_connection_unicast", side_effect=fake_send):
+        with (
+            patch.object(
+                _RemoteExecutionCommandConnection, "_init_command_listen_socket", fake_init
+            ),
+            patch(
+                "unreal_mcp.remote_execution._send_open_connection_unicast",
+                side_effect=fake_send,
+            ),
+        ):
             re.open_command_connection_direct()
 
         assert sent_to[0] == "127.0.0.1"

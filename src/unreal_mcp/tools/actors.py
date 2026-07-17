@@ -91,7 +91,11 @@ else:
         print(json.dumps({{"ok": False, "error": "Failed to spawn actor"}}))
     else:
         actor.set_actor_scale3d(unreal.Vector({sc[0]}, {sc[1]}, {sc[2]}))
-        print(json.dumps({{"ok": True, "label": actor.get_actor_label(), "name": actor.get_name()}}))
+        print(json.dumps({{
+            "ok": True,
+            "label": actor.get_actor_label(),
+            "name": actor.get_name(),
+        }}))
 """
     return _run_and_parse(conn, code)
 
@@ -190,7 +194,10 @@ else:
         if loaded:
             print(json.dumps({{"ok": True, "note": "value loaded as asset reference"}}))
         else:
-            print(json.dumps({{"ok": False, "error": f"Property '{{property_path}}' on '{{label}}': {{first_err}}"}}))
+            print(json.dumps({{
+                "ok": False,
+                "error": f"Property '{{property_path}}' on '{{label}}': {{first_err}}",
+            }}))
 """
     return _run_and_parse(conn, code)
 

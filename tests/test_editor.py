@@ -21,7 +21,9 @@ class TestPlayInEditor:
         assert "editor_request_begin_play" in code
 
     def test_already_running_error_message_in_code(self):
-        conn = _make_conn(stdout=json.dumps({"ok": False, "error": "PIE session is already running"}))
+        conn = _make_conn(
+            stdout=json.dumps({"ok": False, "error": "PIE session is already running"})
+        )
         editor.play_in_editor(conn)
         code = conn.execute.call_args[0][0]
         assert "already running" in code

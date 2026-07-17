@@ -16,7 +16,11 @@ def build_tree(path):
     filter = unreal.ARFilter(package_paths=[path], recursive_paths=False)
     asset_data_list = ar.get_assets(filter)
     assets = [
-        {"name": str(ad.asset_name), "path": str(ad.object_path), "class": str(ad.asset_class_path.asset_name)}
+        {
+            "name": str(ad.asset_name),
+            "path": str(ad.object_path),
+            "class": str(ad.asset_class_path.asset_name),
+        }
         for ad in asset_data_list
     ]
     children = [build_tree(str(p)) for p in sub_paths]

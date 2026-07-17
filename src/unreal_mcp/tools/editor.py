@@ -55,7 +55,10 @@ import unreal, json
 world = unreal.EditorLevelLibrary.get_editor_world()
 pkg = world.get_outer()
 if pkg is None or pkg.get_name() == 'None' or not pkg.get_name().startswith('/'):
-    print(json.dumps({"ok": False, "error": "Level has no save path. Use save_as or save the level manually first."}))
+    print(json.dumps({
+        "ok": False,
+        "error": "Level has no save path. Use save_as or save the level manually first.",
+    }))
 else:
     unreal.EditorLevelLibrary.save_current_level()
     print(json.dumps({"ok": True}))
