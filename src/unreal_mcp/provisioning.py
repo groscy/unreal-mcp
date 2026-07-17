@@ -143,7 +143,7 @@ _rebuild_toolbar()
 """
 
 
-def provision_ue_status_module(conn: "UEConnection", server_command: list[str] | None = None) -> None:
+def provision_ue_status_module(conn: UEConnection, server_command: list[str] | None = None) -> None:
     """Orchestrate project-path resolution, file writing, and init_unreal.py patching."""
     project_dir = _resolve_project_dir(conn)
     if not project_dir:
@@ -161,14 +161,14 @@ def provision_ue_status_module(conn: "UEConnection", server_command: list[str] |
         _push_server_command(conn, server_command)
 
 
-def _resolve_project_dir(conn: "UEConnection") -> str:
+def _resolve_project_dir(conn: UEConnection) -> str:
     result = conn.execute("import unreal; print(unreal.Paths.project_dir())")
     if not result["ok"]:
         return ""
     return (result.get("stdout") or "").strip()
 
 
-def _write_status_module(conn: "UEConnection", content_python: str) -> None:
+def _write_status_module(conn: UEConnection, content_python: str) -> None:
     """Always overwrite unreal_mcp_status.py so the on-disk copy stays current."""
     status_path = content_python + "/unreal_mcp_status.py"
     encoded = base64.b64encode(_STATUS_MODULE_CONTENT.encode()).decode()
@@ -203,7 +203,7 @@ def _write_status_module(conn: "UEConnection", content_python: str) -> None:
     )
 
 
-def _write_config(conn: "UEConnection", content_python: str, server_command: list[str]) -> None:
+def _write_config(conn: UEConnection, content_python: str, server_command: list[str]) -> None:
     """Write unreal_mcp_config.json with the server launch command."""
     config_path = content_python + "/unreal_mcp_config.json"
     config_json = json.dumps({"server_command": server_command})
@@ -224,7 +224,7 @@ def _write_config(conn: "UEConnection", content_python: str, server_command: lis
         logger.warning("unreal-mcp: unexpected result writing config: %s", result)
 
 
-def _push_server_command(conn: "UEConnection", server_command: list[str]) -> None:
+def _push_server_command(conn: UEConnection, server_command: list[str]) -> None:
     """Push the server command into the live UE5 module (no restart needed)."""
     cmd_repr = repr(server_command)
     code = f"import unreal_mcp_status; unreal_mcp_status.set_server_command({cmd_repr})"
@@ -233,7 +233,7 @@ def _push_server_command(conn: "UEConnection", server_command: list[str]) -> Non
         logger.warning("unreal-mcp: failed to push server command: %s", result.get("error"))
 
 
-def _patch_init_unreal(conn: "UEConnection", content_python: str) -> None:
+def _patch_init_unreal(conn: UEConnection, content_python: str) -> None:
     """Append import line to init_unreal.py; create the file if absent."""
     init_path = content_python + "/init_unreal.py"
 

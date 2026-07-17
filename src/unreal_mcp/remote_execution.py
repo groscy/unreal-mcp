@@ -1,12 +1,12 @@
 # Copyright Epic Games, Inc. All Rights Reserved.
 
-import sys as _sys
 import json as _json
-import uuid as _uuid
-import time as _time
-import socket as _socket
 import logging as _logging
+import socket as _socket
+import sys as _sys
 import threading as _threading
+import time as _time
+import uuid as _uuid
 
 # Protocol constants (see PythonScriptRemoteExecution.cpp for the full protocol definition)
 _PROTOCOL_VERSION = 1                                   # Protocol version number
@@ -32,7 +32,7 @@ MODE_EXEC_FILE = 'ExecuteFile'                          # Execute the Python com
 MODE_EXEC_STATEMENT = 'ExecuteStatement'                # Execute the Python command as a single statement. This will execute a single statement and print the result. This mode cannot run files
 MODE_EVAL_STATEMENT = 'EvaluateStatement'               # Evaluate the Python command as a single statement. This will evaluate a single statement and return the result. This mode cannot run files
 
-class RemoteExecutionConfig(object):
+class RemoteExecutionConfig:
     '''
     Configuration data for establishing a remote connection with a Unreal Editor instance running Python.
     '''
@@ -43,7 +43,7 @@ class RemoteExecutionConfig(object):
         self.command_endpoint = DEFAULT_COMMAND_ENDPOINT
         self.command_recv_timeout = None  # None = blocking; set to float for a read deadline
 
-class RemoteExecution(object):
+class RemoteExecution:
     '''
     A remote execution session. This class can discover remote "nodes" (Unreal Editor instances running Python), and allow you to open a command channel to a particular instance.
 
@@ -130,7 +130,7 @@ class RemoteExecution(object):
                     conn._command_channel_socket.settimeout(self._config.command_recv_timeout)
                 self._command_connection = conn
                 return
-            except _socket.timeout:
+            except TimeoutError:
                 continue
 
         conn._command_listen_socket.close()
@@ -160,10 +160,10 @@ class RemoteExecution(object):
         '''
         data = self._command_connection.run_command(command, unattended, exec_mode)
         if raise_on_failure and not data['success']:
-            raise RuntimeError('Remote Python Command failed! {0}'.format(data['result']))
+            raise RuntimeError('Remote Python Command failed! {}'.format(data['result']))
         return data
 
-class _RemoteExecutionNode(object):
+class _RemoteExecutionNode:
     '''
     A discovered remote "node" (aka, a Unreal Editor instance running Python).
 
@@ -187,7 +187,7 @@ class _RemoteExecutionNode(object):
         '''
         return (self._last_pong + _NODE_TIMEOUT_SECONDS) < _time_now(now)
 
-class _RemoteExecutionBroadcastNodes(object):
+class _RemoteExecutionBroadcastNodes:
     '''
     A thread-safe set of remote execution "nodes" (Unreal Editor instances running Python).
     '''
@@ -223,7 +223,7 @@ class _RemoteExecutionBroadcastNodes(object):
         now = _time_now(now)
         with self._remote_nodes_lock:
             if node_id not in self._remote_nodes:
-                _logger.debug('Found Node {0}: {1}'.format(node_id, node_data))
+                _logger.debug(f'Found Node {node_id}: {node_data}')
             self._remote_nodes[node_id] = _RemoteExecutionNode(node_data, now)
 
     def timeout_remote_nodes(self, now=None):
@@ -237,10 +237,10 @@ class _RemoteExecutionBroadcastNodes(object):
         with self._remote_nodes_lock:
             for node_id, node in list(self._remote_nodes.items()):
                 if node.should_timeout(now):
-                    _logger.debug('Lost Node {0}: {1}'.format(node_id, node.data))
+                    _logger.debug(f'Lost Node {node_id}: {node.data}')
                     del self._remote_nodes[node_id]
 
-class _RemoteExecutionBroadcastConnection(object):
+class _RemoteExecutionBroadcastConnection:
     '''
     A remote execution broadcast connection (for UDP based messaging and node discovery).
 
@@ -326,7 +326,7 @@ class _RemoteExecutionBroadcastConnection(object):
                         data += part
                         if len(part) < DEFAULT_RECEIVE_BUFFER_SIZE:
                             break
-                except _socket.timeout:
+                except TimeoutError:
                     data = None
                 if data:
                     self._handle_data(data)
@@ -403,7 +403,7 @@ class _RemoteExecutionBroadcastConnection(object):
         if message.type_ == _TYPE_PONG:
             self._handle_pong_message(message)
             return
-        _logger.debug('Unhandled remote execution message type "{0}"'.format(message.type_))
+        _logger.debug(f'Unhandled remote execution message type "{message.type_}"')
 
     def _handle_pong_message(self, message):
         '''
@@ -414,7 +414,7 @@ class _RemoteExecutionBroadcastConnection(object):
         '''
         self._nodes.update_remote_node(message.source, message.data)
 
-class _RemoteExecutionCommandConnection(object):
+class _RemoteExecutionCommandConnection:
     '''
     A remote execution command connection (for TCP based command processing).
 
@@ -536,11 +536,11 @@ class _RemoteExecutionCommandConnection(object):
                 if self._config.command_recv_timeout is not None:
                     self._command_channel_socket.settimeout(self._config.command_recv_timeout)
                 return
-            except _socket.timeout:
+            except TimeoutError:
                 continue
         raise RuntimeError('Remote party failed to attempt the command socket connection!')
 
-class _RemoteExecutionMessage(object):
+class _RemoteExecutionMessage:
     '''
     A message sent or received by remote execution (on either the UDP or TCP connection), as UTF-8 encoded JSON.
 
@@ -615,9 +615,13 @@ class _RemoteExecutionMessage(object):
             json_obj = _json.loads(json_str)
             # Read and validate required protocol version information
             if json_obj['version'] != _PROTOCOL_VERSION:
-                raise ValueError('"version" is incorrect (got {0}, expected {1})!'.format(json_obj['version'], _PROTOCOL_VERSION))
+                raise ValueError(
+                    '"version" is incorrect (got {}, expected {})!'.format(
+                        json_obj['version'], _PROTOCOL_VERSION))
             if json_obj['magic'] != _PROTOCOL_MAGIC:
-                raise ValueError('"magic" is incorrect (got "{0}", expected "{1}")!'.format(json_obj['magic'], _PROTOCOL_MAGIC))
+                raise ValueError(
+                    '"magic" is incorrect (got "{}", expected "{}")!'.format(
+                        json_obj['magic'], _PROTOCOL_MAGIC))
             # Read required fields
             local_type = json_obj['type']
             local_source = json_obj['source']
@@ -627,7 +631,7 @@ class _RemoteExecutionMessage(object):
             self.dest = json_obj.get('dest')
             self.data = json_obj.get('data')
         except Exception as e:
-            _logger.error('Failed to deserialize JSON "{0}": {1}'.format(json_str, str(e)))
+            _logger.error(f'Failed to deserialize JSON "{json_str}": {str(e)}')
             return False
         return True
 

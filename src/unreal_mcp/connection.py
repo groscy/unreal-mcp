@@ -9,9 +9,9 @@ import time
 from typing import Any
 
 from .remote_execution import (
-    DEFAULT_MULTICAST_GROUP_ENDPOINT,
-    DEFAULT_MULTICAST_BIND_ADDRESS,
     DEFAULT_COMMAND_ENDPOINT,
+    DEFAULT_MULTICAST_BIND_ADDRESS,
+    DEFAULT_MULTICAST_GROUP_ENDPOINT,
     MODE_EXEC_FILE,
     RemoteExecution,
     RemoteExecutionConfig,

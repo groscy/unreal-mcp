@@ -14,8 +14,10 @@ from .connection import ConnectionState, get_connection
 from .heartbeat import HeartbeatClient, run_heartbeat_loop
 from .provisioning import provision_ue_status_module
 from .reconnect import run_reconnect_loop
+from .resources import content as content_resource
+from .resources import level as level_resource
+from .resources import world as world_resource
 from .tools import actors, assets, blueprints, editor, python_exec, umg, verification
-from .resources import level as level_resource, content as content_resource, world as world_resource
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

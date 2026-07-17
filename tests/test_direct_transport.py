@@ -8,13 +8,12 @@ import pytest
 
 from unreal_mcp.connection import ConnectionState, UEConnection
 from unreal_mcp.remote_execution import (
+    _TYPE_OPEN_CONNECTION,
     RemoteExecution,
     RemoteExecutionConfig,
     _RemoteExecutionCommandConnection,
-    _TYPE_OPEN_CONNECTION,
     _send_open_connection_unicast,
 )
-
 
 # ---------------------------------------------------------------------------
 # 4.1 – unicast open_connection message shape
@@ -181,7 +180,7 @@ class TestCommandSocketTimeout:
         conn = UEConnection()
         conn.state = ConnectionState.CONNECTED
         conn._re = MagicMock()
-        conn._re.run_command.side_effect = socket.timeout("timed out")
+        conn._re.run_command.side_effect = TimeoutError("timed out")
 
         result = conn.execute("print('hello')")
 

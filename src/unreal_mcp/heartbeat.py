@@ -55,7 +55,7 @@ class HeartbeatClient:
             )
             logger.debug("unreal-mcp: heartbeat channel connected to %s:%d", self.host, self.port)
             return True
-        except (ConnectionRefusedError, OSError, asyncio.TimeoutError):
+        except (TimeoutError, ConnectionRefusedError, OSError):
             # No listener (UE5 closed or plugin absent) — expected, stay quiet.
             self._reader = None
             self._writer = None

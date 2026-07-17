@@ -3,11 +3,10 @@
 Run with:  uv run pytest tests/test_live.py -v -s
 """
 
-import json
 import pytest
 
 from unreal_mcp.connection import UEConnection
-from unreal_mcp.tools import actors, assets, blueprints, editor
+from unreal_mcp.tools import actors, assets, editor
 from unreal_mcp.tools.python_exec import execute_python
 
 
