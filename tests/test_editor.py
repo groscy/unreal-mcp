@@ -17,8 +17,8 @@ class TestPlayInEditor:
         conn = _make_conn(stdout=json.dumps({"ok": True}))
         editor.play_in_editor(conn)
         code = conn.execute.call_args[0][0]
-        assert "is_play_in_editor" in code
-        assert "play_level_in_viewport" in code
+        assert "is_in_play_in_editor" in code
+        assert "editor_request_begin_play" in code
 
     def test_already_running_error_message_in_code(self):
         conn = _make_conn(stdout=json.dumps({"ok": False, "error": "PIE session is already running"}))
@@ -32,8 +32,8 @@ class TestStopPlay:
         conn = _make_conn(stdout=json.dumps({"ok": True}))
         editor.stop_play(conn)
         code = conn.execute.call_args[0][0]
-        assert "is_play_in_editor" in code
-        assert "end_play" in code
+        assert "is_in_play_in_editor" in code
+        assert "editor_request_end_play" in code
 
     def test_not_running_error_in_code(self):
         conn = _make_conn(stdout=json.dumps({"ok": True}))

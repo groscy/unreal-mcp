@@ -19,7 +19,7 @@ class TestCreateBlueprint:
         code = conn.execute.call_args[0][0]
         assert "/Game/BP/MyActor" in code
         assert "Actor" in code
-        assert "BlueprintFactory" in code
+        assert "create_blueprint_asset_with_parent" in code
 
     def test_exists_check_in_code(self):
         conn = _make_conn(stdout=json.dumps({"ok": False, "error": "Asset already exists"}))
@@ -53,7 +53,7 @@ class TestAddVariable:
         code = conn.execute.call_args[0][0]
         assert "Health" in code
         assert "Float" in code
-        assert "new_variables" in code
+        assert "add_member_variable" in code
 
     def test_default_value_in_code(self):
         conn = _make_conn(stdout=json.dumps({"ok": True}))
@@ -68,7 +68,7 @@ class TestAddFunction:
         blueprints.add_function(conn, "/Game/BP/MyActor", "OnDeath")
         code = conn.execute.call_args[0][0]
         assert "OnDeath" in code
-        assert "add_function_graph_to_blueprint" in code
+        assert "add_function_graph" in code
 
 
 class TestGetBlueprintInfo:
