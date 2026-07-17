@@ -54,6 +54,10 @@ class UEConnection:
         self._re: RemoteExecution | None = None
         self.state: ConnectionState = ConnectionState.DISCONNECTED
         self._last_error: str = ""
+        # Bumped on every successful connect. A reconnect may land on a
+        # different editor, so anything cached about the connected editor
+        # (see extensions.py) is keyed on this and re-derived when it changes.
+        self.epoch: int = 0
         # Exponential-backoff bookkeeping for the background reconnect task.
         self._reconnect_delay: float = 1.0
         self._reconnect_attempts: int = 0
@@ -109,6 +113,7 @@ class UEConnection:
             self._re = re
             self.state = ConnectionState.CONNECTED
             self._last_error = ""
+            self.epoch += 1
             logger.info("Connected to UE5 editor via direct loopback (host: %s)", host)
             self.push_ue_status("connected")
             return True
@@ -164,6 +169,7 @@ class UEConnection:
             self._re = re
             self.state = ConnectionState.CONNECTED
             self._last_error = ""
+            self.epoch += 1
             logger.info("Connected to UE5 editor via discovery (node: %s)", node_id)
             self.push_ue_status("connected")
             return True

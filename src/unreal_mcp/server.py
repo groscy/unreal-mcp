@@ -10,6 +10,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import AnyUrl, ImageContent, Resource, TextContent, Tool
 
+from . import extensions
 from .connection import ConnectionState, get_connection
 from .heartbeat import HeartbeatClient, run_heartbeat_loop
 from .provisioning import provision_ue_status_module
@@ -329,44 +330,13 @@ ALL_TOOLS: list[Tool] = [
             "required": ["asset_path", "name"],
         },
     ),
-    Tool(
-        name="add_component",
-        description="Add a component to a Blueprint's component hierarchy (SCS) by class name.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "asset_path": {"type": "string"},
-                "component_class": {
-                    "type": "string",
-                    "description": "Class name, e.g. SphereComponent, StaticMeshComponent",
-                },
-                "variable_name": {
-                    "type": "string",
-                    "description": "Name for the new component variable",
-                },
-            },
-            "required": ["asset_path", "component_class", "variable_name"],
-        },
-    ),
-    Tool(
-        name="set_variable_default",
-        description="Set the default value of an existing Blueprint variable via CDO.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "asset_path": {"type": "string"},
-                "name": {"type": "string"},
-                "value": {"description": "New default value (any JSON-serialisable type)"},
-            },
-            "required": ["asset_path", "name", "value"],
-        },
-    ),
-    # C++-backed tools (require BattleforgeEditor module to be built)
+    # Extension-backed: UE 5.7 does not expose SimpleConstructionScript to
+    # Python, so this is only offered when an editor extension provides it.
     Tool(
         name="add_component",
         description=(
             "Add a component (e.g. SphereComponent) to a Blueprint's component hierarchy. "
-            "Requires BattleforgeEditor C++ module."
+            "Requires an editor extension module."
         ),
         inputSchema={
             "type": "object",
@@ -384,8 +354,10 @@ ALL_TOOLS: list[Tool] = [
     Tool(
         name="set_variable_default",
         description=(
-            "Set a Blueprint variable's default value. Requires BattleforgeEditor C++ module "
-            "for Blueprint-defined vars."
+            "Set the default value of an existing Blueprint variable. Uses an editor "
+            "extension when available; otherwise falls back to the Class Default Object, "
+            "which works for variables inherited from a C++ parent class but not for "
+            "Blueprint-defined ones."
         ),
         inputSchema={
             "type": "object",
@@ -396,7 +368,7 @@ ALL_TOOLS: list[Tool] = [
                 "value_type": {
                     "type": "string",
                     "default": "float",
-                    "description": "float, int, or bool",
+                    "description": "float, int, or bool (used by the extension path)",
                 },
             },
             "required": ["asset_path", "name", "value"],
@@ -406,7 +378,7 @@ ALL_TOOLS: list[Tool] = [
         name="create_widget_layout",
         description=(
             "Build a UMG widget hierarchy from a JSON layout descriptor. "
-            "Requires BattleforgeEditor C++ module."
+            "Requires an editor extension module."
         ),
         inputSchema={
             "type": "object",
@@ -427,7 +399,7 @@ ALL_TOOLS: list[Tool] = [
         name="add_property_binding",
         description=(
             "Bind a UMG widget property to a Blueprint function "
-            "(e.g. TextBlock.Text → GetPowerText). Requires BattleforgeEditor C++ module."
+            "(e.g. TextBlock.Text → GetLabelText). Requires an editor extension module."
         ),
         inputSchema={
             "type": "object",
@@ -550,15 +522,6 @@ ALL_TOOLS: list[Tool] = [
             "required": ["code"],
         },
     ),
-    Tool(
-        name="inspect_pie_state",
-        description=(
-            "Read live Battleforge gameplay state during a PIE session: "
-            "PowerPool, WellsHeld, hand/deck counts, base HP, mine and well ownership. "
-            "Returns JSON suitable for verifying smoke-test scenarios."
-        ),
-        inputSchema={"type": "object", "properties": {}, "required": []},
-    ),
     # runtime verification (visual + live state)
     Tool(
         name="take_screenshot",
@@ -651,10 +614,26 @@ ALL_TOOLS: list[Tool] = [
 
 _TOOL_MAP = {t.name: t for t in ALL_TOOLS}
 
+# Tools that cannot run against a stock editor because they are implemented
+# against a C++ editor-extension class. Each declares the extension ROLE it
+# needs; the class backing that role is configuration (see extensions.py). Tools
+# absent from this map have no extension dependency and are always advertised.
+_TOOL_ROLE: dict[str, str] = {
+    "add_component": extensions.ROLE_BLUEPRINT,
+    "create_widget_layout": extensions.ROLE_WIDGET,
+    "add_property_binding": extensions.ROLE_WIDGET,
+}
+
+
+def _tool_is_available(name: str, available: frozenset[str]) -> bool:
+    role = _TOOL_ROLE.get(name)
+    return role is None or role in available
+
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
-    return ALL_TOOLS
+    available = extensions.available_roles(get_connection())
+    return [t for t in ALL_TOOLS if _tool_is_available(t.name, available)]
 
 
 @app.call_tool()
@@ -674,6 +653,25 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent | 
 
 def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
     conn = get_connection()
+
+    # A client may call a tool that list_tools did not advertise. Say which
+    # class is missing and what it backs, rather than failing somewhere deeper
+    # with a less obvious message.
+    role = _TOOL_ROLE.get(name)
+    if role is not None and role not in extensions.available_roles(conn):
+        class_name = extensions.class_for_role(role)
+        return {
+            "ok": False,
+            "error": (
+                f"'{name}' needs the '{role}' editor extension, expected as class "
+                f"'{class_name}', which the connected editor does not expose. Build "
+                f"the C++ editor module that provides it, or point the role at "
+                f"another class via UE_EDITOR_EXTENSIONS."
+            ),
+            "missing_role": role,
+            "missing_class": class_name,
+        }
+
     match name:
         case "ping":
             return conn.ping()
@@ -741,15 +739,27 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             return blueprints.add_event_dispatcher(conn, args["asset_path"], args["name"])
         case "add_component":
             return blueprints.add_component_cpp(
-                conn, args["asset_path"], args["component_class"], args["variable_name"]
-            )
-        case "set_variable_default":
-            return blueprints.set_variable_default_cpp(
                 conn,
                 args["asset_path"],
-                args["name"],
-                args["value"],
-                args.get("value_type", "float"),
+                args["component_class"],
+                args["variable_name"],
+                extensions.class_for_role(extensions.ROLE_BLUEPRINT),
+            )
+        case "set_variable_default":
+            # Prefer the extension, which can also reach Blueprint-defined
+            # variables; otherwise fall back to the CDO path, which handles
+            # variables inherited from a C++ parent class.
+            if extensions.ROLE_BLUEPRINT in extensions.available_roles(conn):
+                return blueprints.set_variable_default_cpp(
+                    conn,
+                    args["asset_path"],
+                    args["name"],
+                    args["value"],
+                    args.get("value_type", "float"),
+                    extensions.class_for_role(extensions.ROLE_BLUEPRINT),
+                )
+            return blueprints.set_variable_default(
+                conn, args["asset_path"], args["name"], args["value"]
             )
         case "create_widget_blueprint":
             return umg.create_widget_blueprint(
@@ -760,7 +770,12 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
                 conn, args["asset_path"], args.get("variables"), args.get("functions")
             )
         case "create_widget_layout":
-            return umg.create_widget_layout(conn, args["asset_path"], args["layout"])
+            return umg.create_widget_layout(
+                conn,
+                args["asset_path"],
+                args["layout"],
+                extensions.class_for_role(extensions.ROLE_WIDGET),
+            )
         case "add_property_binding":
             return umg.add_property_binding(
                 conn,
@@ -768,6 +783,7 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
                 args["widget_name"],
                 args["property_name"],
                 args["function_name"],
+                extensions.class_for_role(extensions.ROLE_WIDGET),
             )
         case "play_in_editor":
             return editor.play_in_editor(conn)
@@ -785,8 +801,6 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             return editor.set_world_settings(conn, args["settings"])
         case "execute_python":
             return python_exec.execute_python(conn, args["code"])
-        case "inspect_pie_state":
-            return actors.inspect_pie_state(conn)
         case "take_screenshot":
             return verification.take_screenshot(
                 conn, args.get("width", 1280), args.get("height", 720), args.get("label")

@@ -132,8 +132,12 @@ def create_widget_layout(
     conn: UEConnection,
     asset_path: str,
     layout: dict[str, Any],
+    ext_class: str = "",
 ) -> dict[str, Any]:
-    """Build a UMG widget hierarchy from a Python dict via C++ BFWidgetExtensions.
+    """Build a UMG widget hierarchy from a Python dict via the widget extension.
+
+    ``ext_class`` is the class the editor is expected to expose; it must provide
+    ``create_widget_layout``. The name is configuration -- see ``extensions.py``.
 
     layout format:
       {"type": "VerticalBox", "name": "Root", "children": [
@@ -148,14 +152,16 @@ def create_widget_layout(
 import unreal, json
 asset_path  = {json.dumps(asset_path)}
 layout_json = {json.dumps(layout_json)}
+ext_name    = {json.dumps(ext_class)}
 
-if not hasattr(unreal, "BFWidgetExtensions"):
+ext = getattr(unreal, ext_name, None)
+if ext is None:
     print(json.dumps({{
         "ok": False,
-        "error": "BFWidgetExtensions not available — build BattleforgeEditor first.",
+        "error": f"{{ext_name}} not available — build the C++ editor module that provides it.",
     }}))
 else:
-    ok = unreal.BFWidgetExtensions.create_widget_layout(asset_path, layout_json)
+    ok = ext.create_widget_layout(asset_path, layout_json)
     print(json.dumps({{"ok": ok}}))
 """
     return _run_and_parse(conn, code)
@@ -167,11 +173,15 @@ def add_property_binding(
     widget_name: str,
     property_name: str,
     function_name: str,
+    ext_class: str = "",
 ) -> dict[str, Any]:
-    """Bind a widget property to a Blueprint function via C++ BFWidgetExtensions.
+    """Bind a widget property to a Blueprint function via the widget extension.
 
     Equivalent to clicking the Bind button on a widget property in the UMG Designer.
     The function stub must already exist in the Widget Blueprint.
+
+    ``ext_class`` is the class the editor is expected to expose; it must provide
+    ``add_property_binding``. The name is configuration -- see ``extensions.py``.
     """
     code = f"""
 import unreal, json
@@ -179,14 +189,16 @@ asset_path    = {json.dumps(asset_path)}
 widget_name   = {json.dumps(widget_name)}
 property_name = {json.dumps(property_name)}
 function_name = {json.dumps(function_name)}
+ext_name      = {json.dumps(ext_class)}
 
-if not hasattr(unreal, "BFWidgetExtensions"):
+ext = getattr(unreal, ext_name, None)
+if ext is None:
     print(json.dumps({{
         "ok": False,
-        "error": "BFWidgetExtensions not available — build BattleforgeEditor first.",
+        "error": f"{{ext_name}} not available — build the C++ editor module that provides it.",
     }}))
 else:
-    ok = unreal.BFWidgetExtensions.add_property_binding(
+    ok = ext.add_property_binding(
         asset_path, widget_name, property_name, function_name)
     print(json.dumps({{"ok": ok}}))
 """

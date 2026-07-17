@@ -419,74 +419,11 @@ else:
 
 
 # ---------------------------------------------------------------------------
-# Components
-# ---------------------------------------------------------------------------
-
-def add_component(
-    conn: UEConnection,
-    asset_path: str,
-    component_class: str,
-    variable_name: str,
-) -> dict[str, Any]:
-    """Add a component to a Blueprint's SCS.
-
-    Requires UE Python to expose SimpleConstructionScript.
-    """
-    code = f"""
-import unreal, json
-asset_path     = {json.dumps(asset_path)}
-comp_class_str = {json.dumps(component_class)}
-variable_name  = {json.dumps(variable_name)}
-EAL = unreal.EditorAssetLibrary
-BEL = unreal.BlueprintEditorLibrary
-
-bp = EAL.load_asset(asset_path)
-if bp is None:
-    print(json.dumps({{"ok": False, "error": f"Not found: {{asset_path}}"}}))
-    raise SystemExit()
-
-comp_cls = (unreal.load_class(None, f"/Script/Engine.{{comp_class_str}}")
-            or unreal.load_class(None, comp_class_str))
-if comp_cls is None:
-    print(json.dumps({{"ok": False, "error": f"Component class not found: {{comp_class_str}}"}}))
-    raise SystemExit()
-
-errors = []
-
-# Method: use unreal.EditorBlueprintLibrary.add_component if it exists (future-proofing)
-if hasattr(unreal, "EditorBlueprintLibrary"):
-    try:
-        lib = unreal.EditorBlueprintLibrary
-        if hasattr(lib, "add_component_to_blueprint"):
-            lib.add_component_to_blueprint(bp, comp_cls, variable_name)
-            BEL.compile_blueprint(bp)
-            EAL.save_asset(asset_path)
-            print(json.dumps({{"ok": True, "method": "EditorBlueprintLibrary"}}))
-            raise SystemExit()
-    except SystemExit:
-        raise
-    except Exception as e:
-        errors.append(f"EditorBlueprintLibrary: {{e}}")
-
-# UE 5.7: SimpleConstructionScript not accessible via Python API.
-# Component addition requires the Blueprint Components panel in the editor.
-print(json.dumps({{
-    "ok": False,
-    "error": (
-        "add_component is not supported in UE 5.7 via Python API "
-        "(SimpleConstructionScript is not exposed). Add the component "
-        "manually in the Blueprint Components panel."
-    ),
-    "component_class": comp_class_str,
-    "variable_name": variable_name,
-    "errors": errors,
-}}))
-"""
-    return _run_and_parse(conn, code)
-
-
-# ---------------------------------------------------------------------------
-# call_function (unchanged logic, updated to use EAL)
+# Components (extension-backed)
+#
+# UE 5.7 does not expose SimpleConstructionScript to Python, so there is no
+# pure-Python way to add a component to a Blueprint. These go through the
+# configured editor-extension class instead.
 # ---------------------------------------------------------------------------
 
 def add_component_cpp(
@@ -494,24 +431,29 @@ def add_component_cpp(
     asset_path: str,
     component_class: str,
     variable_name: str,
+    ext_class: str,
 ) -> dict[str, Any]:
-    """Add a component via the C++ BFEditorExtensions (requires BattleforgeEditor module built)."""
+    """Add a component via the blueprint editor extension.
+
+    ``ext_class`` is the class the editor is expected to expose; it must provide
+    ``add_component_to_blueprint``. The name is configuration -- see
+    ``extensions.py`` -- so no specific project's class is baked in here.
+    """
     code = f"""
 import unreal, json
 asset_path     = {json.dumps(asset_path)}
 comp_class     = {json.dumps(component_class)}
 variable_name  = {json.dumps(variable_name)}
+ext_name       = {json.dumps(ext_class)}
 
-if not hasattr(unreal, "BFEditorExtensions"):
+ext = getattr(unreal, ext_name, None)
+if ext is None:
     print(json.dumps({{
         "ok": False,
-        "error": (
-            "BFEditorExtensions not available — build the BattleforgeEditor "
-            "C++ module first."
-        ),
+        "error": f"{{ext_name}} not available — build the C++ editor module that provides it.",
     }}))
 else:
-    ok = unreal.BFEditorExtensions.add_component_to_blueprint(asset_path, comp_class, variable_name)
+    ok = ext.add_component_to_blueprint(asset_path, comp_class, variable_name)
     print(json.dumps({{"ok": ok}}))
 """
     return _run_and_parse(conn, code)
@@ -523,22 +465,29 @@ def set_variable_default_cpp(
     name: str,
     value: Any,
     value_type: str = "float",
+    ext_class: str = "",
 ) -> dict[str, Any]:
-    """Set a Blueprint variable default via C++ BFEditorExtensions."""
+    """Set a Blueprint variable default via the blueprint editor extension.
+
+    ``ext_class`` is the class the editor is expected to expose; it must provide
+    ``set_variable_default_float`` / ``_int`` / ``_bool``. The name is
+    configuration -- see ``extensions.py``.
+    """
     code = f"""
 import unreal, json
 asset_path = {json.dumps(asset_path)}
 var_name   = {json.dumps(name)}
 value      = {json.dumps(value)}
 value_type = {json.dumps(value_type)}
+ext_name   = {json.dumps(ext_class)}
 
-if not hasattr(unreal, "BFEditorExtensions"):
+ext = getattr(unreal, ext_name, None)
+if ext is None:
     print(json.dumps({{
         "ok": False,
-        "error": "BFEditorExtensions not available — build BattleforgeEditor first.",
+        "error": f"{{ext_name}} not available — build the C++ editor module that provides it.",
     }}))
 else:
-    ext = unreal.BFEditorExtensions
     t = value_type.lower()
     if t in ("float", "real", "double"):
         ok = ext.set_variable_default_float(asset_path, var_name, float(value))

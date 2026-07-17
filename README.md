@@ -150,8 +150,32 @@ Fixed. Gravity is restored to -980.0.
 | `UE_COMMAND_RECV_TIMEOUT` | `30.0` | Read timeout (seconds) for the command channel; prevents a hung editor from blocking tool calls indefinitely |
 | `UE_MCP_HEARTBEAT_PORT` | `6690` | TCP port of the `UnrealMCPStatus` plugin's heartbeat listener |
 | `UE_MCP_HEARTBEAT_INTERVAL` | `5.0` | Seconds between heartbeat messages |
+| `UE_EDITOR_EXTENSIONS` | `blueprint=BFEditorExtensions,widget=BFWidgetExtensions` | Comma-separated `role=ClassName` pairs naming the optional C++ editor-extension class behind each role (see [Extension-gated tools](#extension-gated-tools)). Known roles: `blueprint`, `widget` |
+
+## Extension-gated tools
+
+Most tools work against a stock UE5 editor with nothing but the Python Editor Script Plugin. A few cannot: UE 5.7 does not expose everything to Python (for example `SimpleConstructionScript`, which is why a Blueprint component cannot be added from Python at all), so those tools are implemented against a **C++ editor-extension class** that is not part of this repo.
+
+Rather than advertise tools that cannot run, the server asks the connected editor which extension classes it exposes and **only lists the dependent tools when they are present**. Against a stock editor you simply will not see them — that is expected, not a fault. If a client calls one anyway, it returns a structured error naming the class it needs.
+
+Extensions are configured by **role**, since each tool calls specific methods on a specific class:
+
+| Role | Default class | Gated tools |
+|---|---|---|
+| `blueprint` | `BFEditorExtensions` | `add_component` |
+| `widget` | `BFWidgetExtensions` | `create_widget_layout`, `add_property_binding` |
+
+To use your own C++ module, expose a class implementing the same methods and point the role at it:
+
+```bash
+UE_EDITOR_EXTENSIONS="blueprint=MyEditorExtensions,widget=MyWidgetExtensions"
+```
+
+`set_variable_default` is **not** gated: it uses the extension when available (which can also reach Blueprint-defined variables) and otherwise falls back to the Class Default Object, which works for variables inherited from a C++ parent class.
 
 ## Tools
+
+Tools marked **(extension)** appear only when the relevant editor extension is present, as described above.
 
 ### Connection
 - `ping` — Check connection status and UE5 version
@@ -180,12 +204,16 @@ Fixed. Gravity is restored to -980.0.
 - `add_variable` — Add a variable to a Blueprint
 - `add_function` — Add an empty function graph to a Blueprint
 - `add_event_dispatcher` — Add a multicast delegate (Event Dispatcher) to a Blueprint
+- `set_variable_default` — Set the default value of an existing Blueprint variable. Uses the `blueprint` extension when available; otherwise falls back to the CDO, which reaches variables inherited from a C++ parent class but not Blueprint-defined ones
 - `get_blueprint_info` — Get variables, functions, and components of a Blueprint
 - `call_function` — Call a function on a level actor or Blueprint CDO
+- `add_component` — **(extension: `blueprint`)** Add a component to a Blueprint's component hierarchy. Requires an extension because UE 5.7 does not expose `SimpleConstructionScript` to Python
 
 ### Widget Blueprints (UMG)
 - `create_widget_blueprint` — Create a new Widget Blueprint asset (UserWidget subclass)
 - `scaffold_widget` — Create a Widget Blueprint and add variables and function stubs in one call
+- `create_widget_layout` — **(extension: `widget`)** Build a UMG widget hierarchy from a JSON layout descriptor
+- `add_property_binding` — **(extension: `widget`)** Bind a widget property to a Blueprint function (e.g. `TextBlock.Text` → `GetLabelText`)
 
 ### Editor Control
 - `play_in_editor` — Start a PIE session
@@ -216,6 +244,12 @@ These tools observe and drive a running Play-In-Editor session, so you can verif
 - `unreal://world/settings` — Live World Settings properties
 
 Resources always reflect live editor state (fetched on every read, never cached).
+
+## Removed tools
+
+**`inspect_pie_state`** (removed) read gameplay state specific to one private game project (power pools, card hands, base HP). That is game-domain logic rather than an engine capability, so it does not belong in a general-purpose UE5 server and could not be generalised.
+
+Use the generic PIE tools instead: `set_pie_property` to stage state and `call_pie_function` to drive gameplay, both of which target `player0`/`player1`, `gamemode`, `gamestate`, or an actor label. A project-specific convenience wrapper belongs in that project, composed from these.
 
 ## Troubleshooting
 
