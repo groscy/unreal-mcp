@@ -57,10 +57,31 @@ ALL_TOOLS: list[Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "class_path": {"type": "string", "description": "UE class path, e.g. /Script/Engine.PointLight"},
-                "location": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "[X, Y, Z]"},
-                "rotation": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "[Pitch, Yaw, Roll]"},
-                "scale": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "[X, Y, Z]"},
+                "class_path": {
+                    "type": "string",
+                    "description": "UE class path, e.g. /Script/Engine.PointLight",
+                },
+                "location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "[X, Y, Z]",
+                },
+                "rotation": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "[Pitch, Yaw, Roll]",
+                },
+                "scale": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "[X, Y, Z]",
+                },
             },
             "required": ["class_path"],
         },
@@ -76,14 +97,32 @@ ALL_TOOLS: list[Tool] = [
     ),
     Tool(
         name="set_actor_transform",
-        description="Update world-space location, rotation, and/or scale of a named actor. Omit any component to leave it unchanged.",
+        description=(
+            "Update world-space location, rotation, and/or scale of a named actor. "
+            "Omit any component to leave it unchanged."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "label": {"type": "string"},
-                "location": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
-                "rotation": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
-                "scale": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                "location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 3,
+                    "maxItems": 3,
+                },
+                "rotation": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 3,
+                    "maxItems": 3,
+                },
+                "scale": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 3,
+                    "maxItems": 3,
+                },
             },
             "required": ["label"],
         },
@@ -95,7 +134,10 @@ ALL_TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "label": {"type": "string"},
-                "property_path": {"type": "string", "description": "Dot-separated path, e.g. 'LightComponent.Intensity'"},
+                "property_path": {
+                    "type": "string",
+                    "description": "Dot-separated path, e.g. 'LightComponent.Intensity'",
+                },
                 "value": {"description": "New value (any JSON-serialisable type)"},
             },
             "required": ["label", "property_path", "value"],
@@ -110,7 +152,10 @@ ALL_TOOLS: list[Tool] = [
             "properties": {
                 "path": {"type": "string", "description": "Content path, e.g. /Game/Meshes"},
                 "recursive": {"type": "boolean", "default": False},
-                "class_filter": {"type": "string", "description": "Optional asset class to filter by"},
+                "class_filter": {
+                    "type": "string",
+                    "description": "Optional asset class to filter by",
+                },
             },
             "required": ["path"],
         },
@@ -131,7 +176,10 @@ ALL_TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "source_path": {"type": "string", "description": "Absolute disk path to the file"},
-                "destination_path": {"type": "string", "description": "Content browser destination, e.g. /Game/Imported"},
+                "destination_path": {
+                    "type": "string",
+                    "description": "Content browser destination, e.g. /Game/Imported",
+                },
             },
             "required": ["source_path", "destination_path"],
         },
@@ -178,8 +226,14 @@ ALL_TOOLS: list[Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "asset_path": {"type": "string", "description": "Content path for the new Blueprint"},
-                "parent_class": {"type": "string", "description": "Parent class name, e.g. Actor, Pawn, Character"},
+                "asset_path": {
+                    "type": "string",
+                    "description": "Content path for the new Blueprint",
+                },
+                "parent_class": {
+                    "type": "string",
+                    "description": "Parent class name, e.g. Actor, Pawn, Character",
+                },
             },
             "required": ["asset_path", "parent_class"],
         },
@@ -246,9 +300,16 @@ ALL_TOOLS: list[Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "target": {"type": "string", "description": "Actor label or content path to Blueprint CDO"},
+                "target": {
+                    "type": "string",
+                    "description": "Actor label or content path to Blueprint CDO",
+                },
                 "function_name": {"type": "string"},
-                "args": {"type": "object", "description": "Optional keyword arguments", "default": {}},
+                "args": {
+                    "type": "object",
+                    "description": "Optional keyword arguments",
+                    "default": {},
+                },
             },
             "required": ["target", "function_name"],
         },
@@ -260,7 +321,10 @@ ALL_TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "asset_path": {"type": "string"},
-                "name": {"type": "string", "description": "Name of the dispatcher, e.g. OnBaseDestroyed"},
+                "name": {
+                    "type": "string",
+                    "description": "Name of the dispatcher, e.g. OnBaseDestroyed",
+                },
             },
             "required": ["asset_path", "name"],
         },
@@ -272,8 +336,14 @@ ALL_TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "asset_path": {"type": "string"},
-                "component_class": {"type": "string", "description": "Class name, e.g. SphereComponent, StaticMeshComponent"},
-                "variable_name": {"type": "string", "description": "Name for the new component variable"},
+                "component_class": {
+                    "type": "string",
+                    "description": "Class name, e.g. SphereComponent, StaticMeshComponent",
+                },
+                "variable_name": {
+                    "type": "string",
+                    "description": "Name for the new component variable",
+                },
             },
             "required": ["asset_path", "component_class", "variable_name"],
         },
@@ -294,12 +364,18 @@ ALL_TOOLS: list[Tool] = [
     # C++-backed tools (require BattleforgeEditor module to be built)
     Tool(
         name="add_component",
-        description="Add a component (e.g. SphereComponent) to a Blueprint's component hierarchy. Requires BattleforgeEditor C++ module.",
+        description=(
+            "Add a component (e.g. SphereComponent) to a Blueprint's component hierarchy. "
+            "Requires BattleforgeEditor C++ module."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "asset_path": {"type": "string"},
-                "component_class": {"type": "string", "description": "e.g. SphereComponent, StaticMeshComponent"},
+                "component_class": {
+                    "type": "string",
+                    "description": "e.g. SphereComponent, StaticMeshComponent",
+                },
                 "variable_name": {"type": "string"},
             },
             "required": ["asset_path", "component_class", "variable_name"],
@@ -307,28 +383,41 @@ ALL_TOOLS: list[Tool] = [
     ),
     Tool(
         name="set_variable_default",
-        description="Set a Blueprint variable's default value. Requires BattleforgeEditor C++ module for Blueprint-defined vars.",
+        description=(
+            "Set a Blueprint variable's default value. Requires BattleforgeEditor C++ module "
+            "for Blueprint-defined vars."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "asset_path": {"type": "string"},
                 "name": {"type": "string"},
                 "value": {"description": "New default value"},
-                "value_type": {"type": "string", "default": "float", "description": "float, int, or bool"},
+                "value_type": {
+                    "type": "string",
+                    "default": "float",
+                    "description": "float, int, or bool",
+                },
             },
             "required": ["asset_path", "name", "value"],
         },
     ),
     Tool(
         name="create_widget_layout",
-        description="Build a UMG widget hierarchy from a JSON layout descriptor. Requires BattleforgeEditor C++ module.",
+        description=(
+            "Build a UMG widget hierarchy from a JSON layout descriptor. "
+            "Requires BattleforgeEditor C++ module."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "asset_path": {"type": "string"},
                 "layout": {
                     "type": "object",
-                    "description": 'Layout tree, e.g. {"type":"VerticalBox","name":"Root","children":[{"type":"TextBlock","name":"Title","text":"Hello"}]}',
+                    "description": (
+                        'Layout tree, e.g. {"type":"VerticalBox","name":"Root",'
+                        '"children":[{"type":"TextBlock","name":"Title","text":"Hello"}]}'
+                    ),
                 },
             },
             "required": ["asset_path", "layout"],
@@ -336,7 +425,10 @@ ALL_TOOLS: list[Tool] = [
     ),
     Tool(
         name="add_property_binding",
-        description="Bind a UMG widget property to a Blueprint function (e.g. TextBlock.Text → GetPowerText). Requires BattleforgeEditor C++ module.",
+        description=(
+            "Bind a UMG widget property to a Blueprint function "
+            "(e.g. TextBlock.Text → GetPowerText). Requires BattleforgeEditor C++ module."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -355,7 +447,10 @@ ALL_TOOLS: list[Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "asset_path": {"type": "string", "description": "Full content path, e.g. /Game/UI/WBP_MyWidget"},
+                "asset_path": {
+                    "type": "string",
+                    "description": "Full content path, e.g. /Game/UI/WBP_MyWidget",
+                },
                 "parent_class": {"type": "string", "default": "UserWidget"},
             },
             "required": ["asset_path"],
@@ -374,7 +469,10 @@ ALL_TOOLS: list[Tool] = [
                         "type": "object",
                         "properties": {
                             "name": {"type": "string"},
-                            "type": {"type": "string", "description": "e.g. int, float, bool, name, array:name"},
+                            "type": {
+                                "type": "string",
+                                "description": "e.g. int, float, bool, name, array:name",
+                            },
                         },
                         "required": ["name", "type"],
                     },
@@ -442,7 +540,10 @@ ALL_TOOLS: list[Tool] = [
     # python execution
     Tool(
         name="execute_python",
-        description="Execute arbitrary Python code in the UE5 editor context. Full trust — no restrictions applied.",
+        description=(
+            "Execute arbitrary Python code in the UE5 editor context. "
+            "Full trust — no restrictions applied."
+        ),
         inputSchema={
             "type": "object",
             "properties": {"code": {"type": "string"}},
@@ -471,7 +572,10 @@ ALL_TOOLS: list[Tool] = [
             "properties": {
                 "width": {"type": "integer", "default": 1280},
                 "height": {"type": "integer", "default": 720},
-                "label": {"type": "string", "description": "Optional filename label for the saved PNG"},
+                "label": {
+                    "type": "string",
+                    "description": "Optional filename label for the saved PNG",
+                },
             },
             "required": [],
         },
@@ -487,7 +591,11 @@ ALL_TOOLS: list[Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "widget_class": {"type": "string", "default": "TextBlock", "description": "UMG class name, e.g. TextBlock or Image"},
+                "widget_class": {
+                    "type": "string",
+                    "default": "TextBlock",
+                    "description": "UMG class name, e.g. TextBlock or Image",
+                },
             },
             "required": [],
         },
@@ -530,7 +638,11 @@ ALL_TOOLS: list[Tool] = [
             "properties": {
                 "target": {"type": "string"},
                 "function_name": {"type": "string"},
-                "args": {"type": "object", "description": "Optional keyword arguments", "default": {}},
+                "args": {
+                    "type": "object",
+                    "description": "Optional keyword arguments",
+                    "default": {},
+                },
             },
             "required": ["target", "function_name"],
         },
@@ -570,15 +682,31 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
         case "get_actor_properties":
             return actors.get_actor_properties(conn, args["label"])
         case "place_actor":
-            return actors.place_actor(conn, args["class_path"], args.get("location"), args.get("rotation"), args.get("scale"))
+            return actors.place_actor(
+                conn,
+                args["class_path"],
+                args.get("location"),
+                args.get("rotation"),
+                args.get("scale"),
+            )
         case "delete_actor":
             return actors.delete_actor(conn, args["label"])
         case "set_actor_transform":
-            return actors.set_actor_transform(conn, args["label"], args.get("location"), args.get("rotation"), args.get("scale"))
+            return actors.set_actor_transform(
+                conn,
+                args["label"],
+                args.get("location"),
+                args.get("rotation"),
+                args.get("scale"),
+            )
         case "set_actor_property":
-            return actors.set_actor_property(conn, args["label"], args["property_path"], args["value"])
+            return actors.set_actor_property(
+                conn, args["label"], args["property_path"], args["value"]
+            )
         case "list_assets":
-            return assets.list_assets(conn, args["path"], args.get("recursive", False), args.get("class_filter"))
+            return assets.list_assets(
+                conn, args["path"], args.get("recursive", False), args.get("class_filter")
+            )
         case "find_asset":
             return assets.find_asset(conn, args["pattern"])
         case "import_asset":
@@ -598,27 +726,49 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
         case "compile_blueprint":
             return blueprints.compile_blueprint(conn, args["asset_path"])
         case "add_variable":
-            return blueprints.add_variable(conn, args["asset_path"], args["name"], args["type"], args.get("default_value"))
+            return blueprints.add_variable(
+                conn, args["asset_path"], args["name"], args["type"], args.get("default_value")
+            )
         case "add_function":
             return blueprints.add_function(conn, args["asset_path"], args["name"])
         case "get_blueprint_info":
             return blueprints.get_blueprint_info(conn, args["asset_path"])
         case "call_function":
-            return blueprints.call_function(conn, args["target"], args["function_name"], args.get("args", {}))
+            return blueprints.call_function(
+                conn, args["target"], args["function_name"], args.get("args", {})
+            )
         case "add_event_dispatcher":
             return blueprints.add_event_dispatcher(conn, args["asset_path"], args["name"])
         case "add_component":
-            return blueprints.add_component_cpp(conn, args["asset_path"], args["component_class"], args["variable_name"])
+            return blueprints.add_component_cpp(
+                conn, args["asset_path"], args["component_class"], args["variable_name"]
+            )
         case "set_variable_default":
-            return blueprints.set_variable_default_cpp(conn, args["asset_path"], args["name"], args["value"], args.get("value_type", "float"))
+            return blueprints.set_variable_default_cpp(
+                conn,
+                args["asset_path"],
+                args["name"],
+                args["value"],
+                args.get("value_type", "float"),
+            )
         case "create_widget_blueprint":
-            return umg.create_widget_blueprint(conn, args["asset_path"], args.get("parent_class", "UserWidget"))
+            return umg.create_widget_blueprint(
+                conn, args["asset_path"], args.get("parent_class", "UserWidget")
+            )
         case "scaffold_widget":
-            return umg.scaffold_widget(conn, args["asset_path"], args.get("variables"), args.get("functions"))
+            return umg.scaffold_widget(
+                conn, args["asset_path"], args.get("variables"), args.get("functions")
+            )
         case "create_widget_layout":
             return umg.create_widget_layout(conn, args["asset_path"], args["layout"])
         case "add_property_binding":
-            return umg.add_property_binding(conn, args["asset_path"], args["widget_name"], args["property_name"], args["function_name"])
+            return umg.add_property_binding(
+                conn,
+                args["asset_path"],
+                args["widget_name"],
+                args["property_name"],
+                args["function_name"],
+            )
         case "play_in_editor":
             return editor.play_in_editor(conn)
         case "stop_play":
@@ -638,15 +788,21 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
         case "inspect_pie_state":
             return actors.inspect_pie_state(conn)
         case "take_screenshot":
-            return verification.take_screenshot(conn, args.get("width", 1280), args.get("height", 720), args.get("label"))
+            return verification.take_screenshot(
+                conn, args.get("width", 1280), args.get("height", 720), args.get("label")
+            )
         case "inspect_live_widgets":
             return verification.inspect_live_widgets(conn, args.get("widget_class", "TextBlock"))
         case "list_viewport_widgets":
             return verification.list_viewport_widgets(conn)
         case "set_pie_property":
-            return verification.set_pie_property(conn, args["target"], args["property_path"], args["value"])
+            return verification.set_pie_property(
+                conn, args["target"], args["property_path"], args["value"]
+            )
         case "call_pie_function":
-            return verification.call_pie_function(conn, args["target"], args["function_name"], args.get("args", {}))
+            return verification.call_pie_function(
+                conn, args["target"], args["function_name"], args.get("args", {})
+            )
         case _:
             return {"ok": False, "error": f"Unknown tool: {name}"}
 
